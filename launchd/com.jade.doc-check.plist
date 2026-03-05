@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.jade.doc-check.plist
+  Place at: ~/Library/LaunchAgents/com.jade.doc-check.plist
+
+  Nightly doc staleness check — fires at 10pm every day.
+  Detects whether a dev session occurred and verifies docs were updated.
+  Sends a macOS notification if PROJECT_STATUS.md or CHANGELOG.md are stale.
+
+  Runs silently on days with no dev activity.
+
+  Load:    launchctl load ~/Library/LaunchAgents/com.jade.doc-check.plist
+  Unload:  launchctl unload ~/Library/LaunchAgents/com.jade.doc-check.plist
+  Test:    launchctl start com.jade.doc-check
+  Status:  launchctl list | grep jade
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- Job label — must match filename -->
+  <key>Label</key>
+  <string>com.jade.doc-check</string>
+
+  <!-- Command to run -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/spencerhatch/Jade/scripts/check_doc_staleness.py</string>
+  </array>
+
+  <!-- Fire at 10pm every day -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>22</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Run missed jobs if Mac was asleep at 10pm -->
+  <!-- Note: launchd fires once after wake if the window was missed -->
+
+  <!-- Environment — launchd does not inherit shell PATH -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>/Users/spencerhatch</string>
+  </dict>
+
+  <!-- Working directory -->
+  <key>WorkingDirectory</key>
+  <string>/Users/spencerhatch/Jade</string>
+
+  <!-- Logs — stdout and stderr separated -->
+  <key>StandardOutPath</key>
+  <string>/Users/spencerhatch/Jade/logs/doc_check.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/spencerhatch/Jade/logs/doc_check_error.log</string>
+
+  <!-- Do not restart on failure — this is a one-shot nightly check -->
+  <key>RunAtLoad</key>
+  <false/>
+
+</dict>
+</plist>
