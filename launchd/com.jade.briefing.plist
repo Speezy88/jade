@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.jade.briefing.plist
+  Place at: ~/Library/LaunchAgents/com.jade.briefing.plist
+
+  Morning briefing — fires at 7am every day.
+  Fetches live Calendar, Schoology, weather data and generates briefing via Haiku.
+  Sends macOS notification with first 2 lines of briefing.
+
+  IMPORTANT: Google Calendar OAuth must be pre-authorized before loading this plist.
+  Run `python3 jade_briefing.py` manually once to complete browser auth flow.
+
+  Load:    launchctl load ~/Library/LaunchAgents/com.jade.briefing.plist
+  Unload:  launchctl unload ~/Library/LaunchAgents/com.jade.briefing.plist
+  Test:    launchctl start com.jade.briefing
+  Status:  launchctl list | grep jade
+  Logs:    tail -f ~/Jade/logs/briefing.log
+           tail -f ~/Jade/logs/briefing_error.log
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- Job label — must match filename -->
+  <key>Label</key>
+  <string>com.jade.briefing</string>
+
+  <!-- Command to run -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/spencerhatch/Jade/jade_briefing.py</string>
+  </array>
+
+  <!-- Fire at 7am every day -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Environment — launchd does not inherit shell PATH -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>/Users/spencerhatch</string>
+  </dict>
+
+  <!-- Working directory -->
+  <key>WorkingDirectory</key>
+  <string>/Users/spencerhatch/Jade</string>
+
+  <!-- Logs — stdout and stderr separated -->
+  <key>StandardOutPath</key>
+  <string>/Users/spencerhatch/Jade/logs/briefing.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/spencerhatch/Jade/logs/briefing_error.log</string>
+
+  <!-- Do not run immediately on load -->
+  <key>RunAtLoad</key>
+  <false/>
+
+</dict>
+</plist>
