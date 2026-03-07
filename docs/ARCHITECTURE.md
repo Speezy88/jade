@@ -26,12 +26,14 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
                 │                                  │
                 ▼                                  ▼
          jade_briefing.py               jade_nightly.py
-         stdout + notification          interactive terminal (5 phases A→E)
+         stdout + chat loop             interactive terminal (5 phases A→E)
                 │                          │
-         launchd (7am)              extract_structured() → nightly log
-                                    + tomorrow_context.json
-                                         │
-                                    launchd (9:15pm/8:45pm via osascript)
+         extract_morning_context()  extract_structured() → nightly log
+                │                   + tomorrow_context.json
+         morning_context.json            │
+         (fallback: logs/morning/)  launchd (9:15pm/8:45pm via osascript)
+                │
+         launchd (7am)
 ```
 
 ---
@@ -41,7 +43,7 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 | File | Role | Phase |
 |------|------|-------|
 | `jade_prompts.py` | Single source of truth for system prompt assembly. `build_system_prompt(context)` for briefing; `build_nightly_system_prompt(context)` for nightly check-in. No other file assembles prompts. | 1 |
-| `jade_briefing.py` | Morning briefing entry point. Calls all integrations, loads nightly context, builds prompt, calls Haiku, prints output, fires notification. Called by launchd at 7am. | 1 |
+| `jade_briefing.py` | Morning briefing entry point. Calls all integrations, loads nightly context, builds prompt, calls Haiku, prints briefing. After print: interactive chat loop (max 10 turns, Jade-driven closure). Post-chat: `extract_morning_context()` → `memory/cache/morning_context.json`. Fires notification after chat completes. Falls back to `memory/logs/morning/` transcript on extraction failure. Called by launchd at 7am. | 1 |
 | `jade_nightly.py` | Nightly interactive check-in. Five-phase conversation (A→E). Post-session structured extraction to `memory/logs/nightly/` and `memory/cache/tomorrow_context.json`. Hardened extraction: strips markdown fences, logs raw response on failure, writes transcript fallback. Called by launchd via osascript at 9:15pm (weekdays) / 8:45pm (weekends). | 1.5 |
 | `jade_router.py` | Task routing logic — local vs cloud model selection. Not yet built. | Planned |
 | `jade_timeblock.py` | Time-blocked schedule generation. Not yet built. | 2 |
@@ -64,6 +66,7 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 SOUL.md
   + AI_STEERING_RULES.md (optional — warns if missing, doesn't crash)
   + memory/ACTIVE_GOALS.md
+  + ## BRIEFING TONE (conversational register + chat closure instruction)
   + ## RUNTIME CONTEXT (if context dict provided)
       today, weather, calendar_events, assignments
 ```
@@ -132,7 +135,9 @@ Logs:
 - `logs/doc_check.log` — doc check stdout
 - `logs/staleness.log` — append-only staleness events
 - `memory/logs/nightly/YYYY-MM-DD.md` — nightly check-in structured log
+- `memory/logs/morning/YYYY-MM-DD.md` — morning chat fallback transcript (when extraction fails)
 - `memory/cache/tomorrow_context.json` — nightly context passed to next morning's briefing
+- `memory/cache/morning_context.json` — morning chat extraction; schema: `{date, schedule_additions, adjustments, focus, notes}`
 
 ### Local Cluster (not yet integrated)
 

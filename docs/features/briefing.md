@@ -6,8 +6,11 @@
 ## What It Does
 
 Runs at 7am via launchd. Fetches live weather, calendar events, and assignments.
-Assembles a context-rich system prompt. Calls Haiku to generate a structured briefing.
-Prints to terminal and fires a macOS notification.
+Assembles a context-rich system prompt (with conversational tone injection via
+`_BRIEFING_TONE`). Calls Haiku to generate the briefing, prints it, then opens
+an interactive chat loop — Jade drives toward closure and exits when Spencer confirms.
+Post-chat, extracts structured context to `morning_context.json`. Fires notification
+after chat completes.
 
 ## Entry Point
 
@@ -18,14 +21,34 @@ Prints to terminal and fires a macOS notification.
 ```
 jade_briefing.py
   ├── load_dotenv("/Users/spencerhatch/Jade/.env")
-  ├── get_weather()         → "50°F, overcast clouds. High 50°F."
-  ├── get_today_events()    → ["4:30 PM — Lacrosse practice"]
+  ├── get_weather()              → "50°F, overcast clouds. High 50°F."
+  ├── get_today_events()         → ["4:30 PM — Lacrosse practice"]
   ├── get_upcoming_assignments() → ["Calc HW — due today"]
-  ├── build_system_prompt(context={today, weather, calendar_events, assignments})
-  ├── anthropic.Anthropic().messages.create(model="claude-haiku-4-5-20251001", max_tokens=500)
-  ├── print(briefing)       → stdout → logs/briefing.log
-  └── notify(first 2 lines) → macOS notification
+  ├── _load_nightly_context()    → priorities, stated_intentions, open_loops (or missed_nightly)
+  ├── build_system_prompt(context)   ← includes _BRIEFING_TONE
+  ├── Haiku call (max_tokens=500)    → briefing text
+  ├── print(briefing)            → stdout → logs/briefing.log
+  ├── chat loop (max 10 turns, max_tokens=300 per reply)
+  │     Jade asks closing question → Spencer confirms → loop exits
+  ├── extract_morning_context()  → memory/cache/morning_context.json
+  │     (fallback: memory/logs/morning/YYYY-MM-DD.md on parse failure)
+  └── notify(first 2 lines)      → macOS notification
 ```
+
+## morning_context.json Schema
+
+```json
+{
+  "date": "YYYY-MM-DD",
+  "schedule_additions": [],
+  "adjustments": [],
+  "focus": "",
+  "notes": ""
+}
+```
+
+Written to `memory/cache/morning_context.json`. Skipped entirely if Spencer exits
+immediately (blank input on first prompt).
 
 ## Output Format (from SOUL.md briefing spec)
 

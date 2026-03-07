@@ -17,6 +17,17 @@ GOALS_PATH    = JADE_DIR / "memory" / "ACTIVE_GOALS.md"
 STEERING_PATH = JADE_DIR / "AI_STEERING_RULES.md"
 
 
+_BRIEFING_TONE = """\
+## BRIEFING TONE
+Write like you're talking, not generating a report. Use natural transitions —
+"looks like", "so", "heads up", "one thing worth knowing". Vary sentence
+length. No bullet-point brain. Keep it conversational but not slow.
+
+In the follow-up chat after the briefing: you drive toward closure. When the
+conversation feels naturally complete, ask a closing question — "Is that all
+for today?" or similar. Wait for Spencer's confirmation before ending."""
+
+
 def _load(path: Path, required: bool = True) -> str:
     if not path.exists():
         if required:
@@ -49,6 +60,7 @@ def build_system_prompt(context: dict | None = None) -> str:
     if steering:
         sections.append(steering)
     sections.append(goals)
+    sections.append(_BRIEFING_TONE)
     if context:
         sections.append(_format_context(context))
 

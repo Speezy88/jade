@@ -3,6 +3,25 @@
 
 ---
 
+## 2026-03-07 — Briefing chat tail + conversational tone
+
+Added an interactive chat loop to `jade_briefing.py` that runs after the morning briefing
+prints. Jade drives toward closure (asks a closing question when the conversation feels
+complete); exit triggers when the previous Jade turn ended with `?` and Spencer confirms
+with any affirmative. Post-chat, `extract_morning_context()` writes structured data to
+`memory/cache/morning_context.json` (schema: `{date, schedule_additions, adjustments,
+focus, notes}`), with a transcript fallback to `memory/logs/morning/` on failure.
+`jade_prompts.py` updated with `_BRIEFING_TONE` injected into every briefing/chat prompt
+to enforce conversational register ("looks like", "heads up", vary sentence length — no
+bullet-point brain). `ARCHITECTURE.md` updated to reflect new data flows.
+
+Files changed:
+- `jade_briefing.py` — chat loop, `extract_morning_context()`, `_write_morning_transcript_fallback()`, morning_context.json write, notify moved post-chat
+- `jade_prompts.py` — `_BRIEFING_TONE` constant + injected into `build_system_prompt()`
+- `docs/ARCHITECTURE.md` — diagram, File Responsibilities, Prompt Assembly, Logs sections updated
+
+---
+
 ## 2026-03-07 — Phase 1.5 complete: Nightly Check-In
 
 `jade_nightly.py` is operational — an interactive 5-phase terminal session (A: day debrief,

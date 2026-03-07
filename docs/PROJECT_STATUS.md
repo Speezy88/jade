@@ -31,9 +31,9 @@ Phases 1 and 1.5 are complete and operational.
 
 ## What's Built (Phases 1 + 1.5)
 
-**Phase 1:**
-- `jade_briefing.py` — 7am briefing, live data + nightly context, Haiku, macOS notification
-- `jade_prompts.py` — `build_system_prompt()` + `build_nightly_system_prompt()`, single source of prompt assembly
+**Phase 1 + chat tail:**
+- `jade_briefing.py` — 7am briefing, live data + nightly context, Haiku, interactive chat loop (Jade-driven closure), `extract_morning_context()` → `morning_context.json`, notification post-chat
+- `jade_prompts.py` — `build_system_prompt()` (with `_BRIEFING_TONE`) + `build_nightly_system_prompt()`, single source of prompt assembly
 - `integrations/weather.py` — OpenWeatherMap, never raises
 - `integrations/gcal.py` — Google Calendar OAuth2, two calendars, sorted
 - `integrations/schoology.py` — ICS fetch, 6h cache, error fallback
@@ -49,15 +49,6 @@ Phases 1 and 1.5 are complete and operational.
 ---
 
 ## Where to Start Next Session
-
-**Immediate (before Phase 2):**
-
-Load the nightly plist and do a live interactive test:
-```bash
-cp ~/Jade/launchd/com.jade.nightly.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.jade.nightly.plist
-python3 ~/Jade/jade_nightly.py --now   # run in a real terminal, not background
-```
 
 **Phase 2: `/timeblock` command**
 
