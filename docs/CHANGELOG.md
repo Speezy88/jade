@@ -3,6 +3,26 @@
 
 ---
 
+## 2026-03-07 — Phase 1.5 complete: Nightly Check-In
+
+`jade_nightly.py` is operational — an interactive 5-phase terminal session (A: day debrief,
+B: domain check-ins, C: tomorrow planning, D: open loops, E: close) driven by Haiku with a
+multi-turn conversation. Post-session, a second structured Haiku call extracts a JSON log
+written to `memory/logs/nightly/` and `tomorrow_context.json`, which the next morning's
+briefing reads to give Jade continuity across days. Extraction is hardened against Haiku's
+tendency to wrap JSON in markdown fences: fences are stripped before parsing, the raw
+response is logged on failure, and the full conversation is written as a markdown fallback
+if parsing fails entirely. `jade_briefing.py` updated to load nightly context; launchd plist
+added for weekday 9:15pm / weekend 8:45pm scheduling via osascript.
+
+Files changed:
+- `jade_nightly.py` — added (Phase 1.5 entry point)
+- `jade_prompts.py` — added `build_nightly_system_prompt()`, `_format_nightly_context()`
+- `jade_briefing.py` — added `_load_nightly_context()`, context spread
+- `launchd/com.jade.nightly.plist` — added
+
+---
+
 ## 2026-03-06 — Phase 1 complete: Morning Briefing
 
 Phase 1 is fully operational. `jade_briefing.py` runs manually and via launchd at 7am.

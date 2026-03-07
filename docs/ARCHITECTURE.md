@@ -1,5 +1,5 @@
 # ARCHITECTURE.md
-*Last updated: 2026-03-06 | Phase 1 complete*
+*Last updated: 2026-03-07 | Phase 1.5 complete*
 
 ---
 
@@ -17,16 +17,21 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
                 │
                 ▼
          jade_prompts.py
-         build_system_prompt()
-         [SOUL.md + AI_STEERING_RULES.md + ACTIVE_GOALS.md + runtime context]
-                │
-                ▼
-         Anthropic API (Haiku)
-                │
-                ▼
-         jade_briefing.py → stdout + macOS notification
-                │
-         launchd (7am)
+         build_system_prompt()          build_nightly_system_prompt()
+         [SOUL + STEERING + GOALS       [SOUL + STEERING + GOALS
+          + runtime context]             + nightly context + recent logs]
+                │                                  │
+                ▼                                  ▼
+         Anthropic API (Haiku)          Anthropic API (Haiku, multi-turn)
+                │                                  │
+                ▼                                  ▼
+         jade_briefing.py               jade_nightly.py
+         stdout + notification          interactive terminal (5 phases A→E)
+                │                          │
+         launchd (7am)              extract_structured() → nightly log
+                                    + tomorrow_context.json
+                                         │
+                                    launchd (9:15pm/8:45pm via osascript)
 ```
 
 ---
@@ -35,15 +40,14 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 
 | File | Role | Phase |
 |------|------|-------|
-| `jade_prompts.py` | Single source of truth for system prompt assembly. `build_system_prompt(context)` is the only place prompts are built. | 1 |
-| `jade_briefing.py` | Morning briefing entry point. Calls all integrations, builds prompt, calls Haiku, prints output, fires notification. Called by launchd at 7am. | 1 |
+| `jade_prompts.py` | Single source of truth for system prompt assembly. `build_system_prompt(context)` for briefing; `build_nightly_system_prompt(context)` for nightly check-in. No other file assembles prompts. | 1 |
+| `jade_briefing.py` | Morning briefing entry point. Calls all integrations, loads nightly context, builds prompt, calls Haiku, prints output, fires notification. Called by launchd at 7am. | 1 |
+| `jade_nightly.py` | Nightly interactive check-in. Five-phase conversation (A→E). Post-session structured extraction to `memory/logs/nightly/` and `memory/cache/tomorrow_context.json`. Hardened extraction: strips markdown fences, logs raw response on failure, writes transcript fallback. Called by launchd via osascript at 9:15pm (weekdays) / 8:45pm (weekends). | 1.5 |
 | `jade_router.py` | Task routing logic — local vs cloud model selection. Not yet built. | Planned |
-| `jade_nightly.py` | Evening check-in. Interactive. Not yet built. | 1.5 |
 | `jade_timeblock.py` | Time-blocked schedule generation. Not yet built. | 2 |
 | `integrations/weather.py` | OpenWeatherMap free tier. `get_weather()` → formatted string. Never raises. | 1 |
 | `integrations/gcal.py` | Google Calendar OAuth2. `get_today_events()` → list of strings. Fetches from `spencerchatch@gmail.com` and `spencerhatch@seattleacademy.org`. Merges and sorts by start time. Never raises. | 1 |
 | `integrations/schoology.py` | Schoology ICS feed. `get_upcoming_assignments()` → list of strings. 6h cache at `memory/cache/schoology.json`. Never raises. | 1 |
-| `jade_nightly.py` | Nightly interactive check-in. Not yet built. | 1.5 |
 | `scripts/check_doc_staleness.py` | Nightly doc staleness check via launchd at 10pm. Notifies if PROJECT_STATUS.md or CHANGELOG.md are stale after a dev session. | 0 |
 | `SOUL.md` | Jade's behavioral identity. Injected into every prompt via `build_system_prompt()`. Protected — requires explicit approval to modify. | 0 |
 | `AI_STEERING_RULES.md` | Behavioral guardrails (SYSTEM + USER layers). Injected via `build_system_prompt()`. Protected. | 0 |
@@ -65,6 +69,17 @@ SOUL.md
 ```
 
 Sections joined by `\n\n---\n\n`. No prompt assembly happens anywhere else in the codebase.
+
+`build_nightly_system_prompt(context: dict)` in `jade_prompts.py`:
+
+```
+SOUL.md
+  + AI_STEERING_RULES.md (optional)
+  + memory/ACTIVE_GOALS.md
+  + ## NIGHTLY SESSION CONTEXT
+      today, days_to_act, calendar_events, domains, recent_logs (last 3 nights)
+  + Nightly Session Structure instructions
+```
 
 ---
 
@@ -108,6 +123,7 @@ Sections joined by `\n\n---\n\n`. No prompt assembly happens anywhere else in th
 | Plist | Fires | Script |
 |-------|-------|--------|
 | `com.jade.briefing.plist` | 7:00 AM daily | `jade_briefing.py` |
+| `com.jade.nightly.plist` | 9:15 PM weekdays / 8:45 PM weekends | `jade_nightly.py` (via osascript → Terminal) |
 | `com.jade.doc-check.plist` | 10:00 PM daily | `scripts/check_doc_staleness.py` |
 
 Logs:
@@ -115,6 +131,8 @@ Logs:
 - `logs/briefing_error.log` — briefing stderr
 - `logs/doc_check.log` — doc check stdout
 - `logs/staleness.log` — append-only staleness events
+- `memory/logs/nightly/YYYY-MM-DD.md` — nightly check-in structured log
+- `memory/cache/tomorrow_context.json` — nightly context passed to next morning's briefing
 
 ### Local Cluster (not yet integrated)
 
@@ -128,7 +146,6 @@ Logs:
 ## Not Yet Built (Planned)
 
 - `jade_router.py` — model routing (local vs cloud)
-- `jade_nightly.py` — evening check-in (Phase 1.5)
 - `jade_timeblock.py` — time-blocking (Phase 2)
 - Signal system — ratings.jsonl, FAILURES/ (Phase 3)
 - ChromaDB semantic memory (Phase 9)

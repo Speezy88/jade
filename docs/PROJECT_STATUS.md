@@ -1,11 +1,11 @@
 # PROJECT_STATUS.md
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-07*
 
 ---
 
 ## Current Phase: 2 — Calendar Time-Blocking
 
-Phase 1 (Morning Briefing) is complete and operational.
+Phases 1 and 1.5 are complete and operational.
 
 ---
 
@@ -14,7 +14,7 @@ Phase 1 (Morning Briefing) is complete and operational.
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 1 | Morning briefing — live Calendar + Schoology + Weather, launchd, SOUL.md | ✅ Complete |
-| 1.5 | Nightly briefing — `jade_nightly.py`, interactive check-in | Planned |
+| 1.5 | Nightly check-in — `jade_nightly.py`, interactive 5-phase session | ✅ Complete |
 | 2 | Calendar time-blocking — `/timeblock` command, gcal read+write | **Current** |
 | 3 | Signal system — ratings.jsonl, FAILURES/, structured memory | Planned |
 | 4 | Goal action plans + briefing check-ins | Planned |
@@ -29,10 +29,11 @@ Phase 1 (Morning Briefing) is complete and operational.
 
 ---
 
-## What's Built (Phase 1)
+## What's Built (Phases 1 + 1.5)
 
-- `jade_briefing.py` — 7am briefing, live data, Haiku, macOS notification
-- `jade_prompts.py` — `build_system_prompt()`, single source of prompt assembly
+**Phase 1:**
+- `jade_briefing.py` — 7am briefing, live data + nightly context, Haiku, macOS notification
+- `jade_prompts.py` — `build_system_prompt()` + `build_nightly_system_prompt()`, single source of prompt assembly
 - `integrations/weather.py` — OpenWeatherMap, never raises
 - `integrations/gcal.py` — Google Calendar OAuth2, two calendars, sorted
 - `integrations/schoology.py` — ICS fetch, 6h cache, error fallback
@@ -41,9 +42,22 @@ Phase 1 (Morning Briefing) is complete and operational.
 - `scripts/check_doc_staleness.py` — nightly doc freshness enforcement
 - Core config: SOUL.md, AI_STEERING_RULES.md, AGENTS.md, ACTIVE_GOALS.md
 
+**Phase 1.5:**
+- `jade_nightly.py` — interactive 5-phase nightly check-in (A→E), structured extraction, log + context write
+- `launchd/com.jade.nightly.plist` — 9:15pm weekdays / 8:45pm weekends (pending `launchctl load`)
+
 ---
 
 ## Where to Start Next Session
+
+**Immediate (before Phase 2):**
+
+Load the nightly plist and do a live interactive test:
+```bash
+cp ~/Jade/launchd/com.jade.nightly.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.jade.nightly.plist
+python3 ~/Jade/jade_nightly.py --now   # run in a real terminal, not background
+```
 
 **Phase 2: `/timeblock` command**
 
