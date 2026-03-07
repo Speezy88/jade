@@ -9,6 +9,7 @@ stdout → logs/briefing.log       (via launchd StandardOutPath)
 stderr → logs/briefing_error.log (via launchd StandardErrorPath)
 """
 
+import json
 import subprocess
 import sys
 from datetime import date
@@ -27,9 +28,28 @@ from integrations.schoology import get_upcoming_assignments
 from integrations.weather import get_weather
 from jade_prompts import build_system_prompt
 
-_NOTIFIER   = "/opt/homebrew/bin/terminal-notifier"
-_MODEL      = "claude-haiku-4-5-20251001"
-_MAX_TOKENS = 500
+_NOTIFIER     = "/opt/homebrew/bin/terminal-notifier"
+_MODEL        = "claude-haiku-4-5-20251001"
+_MAX_TOKENS   = 500
+_CONTEXT_PATH = Path("/Users/spencerhatch/Jade/memory/cache/tomorrow_context.json")
+
+
+def _load_nightly_context() -> dict:
+    """Load last night's check-in context. Returns missed_nightly=True if absent/stale."""
+    if not _CONTEXT_PATH.exists():
+        return {"missed_nightly": True}
+    try:
+        data = json.loads(_CONTEXT_PATH.read_text())
+        if data.get("date") == date.today().isoformat():
+            return {
+                "missed_nightly":    False,
+                "priorities":        data.get("priorities", []),
+                "stated_intentions": data.get("stated_intentions", []),
+                "open_loops":        data.get("open_loops", []),
+            }
+    except Exception:
+        pass
+    return {"missed_nightly": True}
 
 
 def notify(title: str, message: str) -> None:
@@ -58,6 +78,7 @@ def run() -> None:
         "weather":         weather,
         "calendar_events": events,
         "assignments":     assignments,
+        **_load_nightly_context(),
     }
     system_prompt = build_system_prompt(context=context)
 

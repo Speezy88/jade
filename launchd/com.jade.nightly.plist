@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.jade.nightly.plist
+  Place at: ~/Library/LaunchAgents/com.jade.nightly.plist
+
+  Nightly check-in — opens a Terminal window for the interactive session.
+  Weekdays: 9:15pm | Weekends: 8:45pm
+
+  launchd cannot spawn an interactive terminal directly — uses osascript
+  to open Terminal.app with the script command.
+
+  Load:    launchctl load ~/Library/LaunchAgents/com.jade.nightly.plist
+  Unload:  launchctl unload ~/Library/LaunchAgents/com.jade.nightly.plist
+  Test:    launchctl start com.jade.nightly
+  Status:  launchctl list | grep jade
+  Manual:  python3 ~/Jade/jade_nightly.py --now
+-->
+<plist version="1.0">
+<dict>
+
+  <key>Label</key>
+  <string>com.jade.nightly</string>
+
+  <!-- Opens Terminal.app with the nightly script -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/osascript</string>
+    <string>-e</string>
+    <string>tell application "Terminal" to do script "cd /Users/spencerhatch/Jade && /usr/bin/python3 jade_nightly.py"</string>
+  </array>
+
+  <!--
+    launchd Weekday values: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday,
+                            4=Thursday, 5=Friday, 6=Saturday
+    Weekdays 9:15pm: Mon–Fri (1–5)
+    Weekends 8:45pm: Sat (6), Sun (0)
+  -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <!-- Monday 9:15pm -->
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>15</integer><key>Weekday</key><integer>1</integer></dict>
+    <!-- Tuesday 9:15pm -->
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>15</integer><key>Weekday</key><integer>2</integer></dict>
+    <!-- Wednesday 9:15pm -->
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>15</integer><key>Weekday</key><integer>3</integer></dict>
+    <!-- Thursday 9:15pm -->
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>15</integer><key>Weekday</key><integer>4</integer></dict>
+    <!-- Friday 9:15pm -->
+    <dict><key>Hour</key><integer>21</integer><key>Minute</key><integer>15</integer><key>Weekday</key><integer>5</integer></dict>
+    <!-- Saturday 8:45pm -->
+    <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>45</integer><key>Weekday</key><integer>6</integer></dict>
+    <!-- Sunday 8:45pm -->
+    <dict><key>Hour</key><integer>20</integer><key>Minute</key><integer>45</integer><key>Weekday</key><integer>0</integer></dict>
+  </array>
+
+  <key>RunAtLoad</key>
+  <false/>
+
+</dict>
+</plist>

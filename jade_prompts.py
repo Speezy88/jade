@@ -75,4 +75,57 @@ def _format_context(ctx: dict) -> str:
             lines.extend(f"  • {a}" for a in asgn)
         else:
             lines.append("\nAssignments: None due in the next 48 hours.")
+    if ctx.get("missed_nightly"):
+        lines.append("\nNote: No check-in last night.")
+    if ctx.get("priorities"):
+        lines.append("\nStated priorities for today (from last night's check-in):")
+        lines.extend(f"  • {p}" for p in ctx["priorities"])
+    if ctx.get("stated_intentions"):
+        lines.append("\nSpencer's stated intentions for today:")
+        lines.extend(f"  • {i}" for i in ctx["stated_intentions"])
+    return "\n".join(lines)
+
+
+def build_nightly_system_prompt(context: dict) -> str:
+    """
+    Assemble system prompt for the nightly check-in session.
+    Injects SOUL.md + ACTIVE_GOALS.md + nightly runtime context.
+    """
+    soul     = _load(SOUL_PATH, required=True)
+    steering = _load(STEERING_PATH, required=False)
+    goals    = _load(GOALS_PATH, required=True)
+
+    sections = [soul]
+    if steering:
+        sections.append(steering)
+    sections.append(goals)
+    sections.append(_format_nightly_context(context))
+    return "\n\n---\n\n".join(sections)
+
+
+def _format_nightly_context(ctx: dict) -> str:
+    lines = ["## NIGHTLY SESSION CONTEXT\n"]
+    if "today" in ctx:
+        lines.append(f"Today: {ctx['today']}")
+    if "days_to_act" in ctx:
+        lines.append(f"Days until ACT test (April 14): {ctx['days_to_act']}")
+    if "calendar_events" in ctx:
+        evts = ctx["calendar_events"]
+        if evts:
+            lines.append("\nToday's calendar events:")
+            lines.extend(f"  • {e}" for e in evts)
+        else:
+            lines.append("\nCalendar: No events today.")
+    if "domains" in ctx:
+        lines.append(f"\nDomains to probe tonight: {', '.join(ctx['domains'])}")
+    if ctx.get("recent_logs"):
+        lines.append("\n## Recent Nightly Logs (last 3 nights — for continuity)\n")
+        lines.append(ctx["recent_logs"])
+    lines.append(
+        "\n## Nightly Session Structure\n"
+        "Run through phases A→B→C→D→E as instructed in each turn. "
+        "Keep the total session under 12 minutes. "
+        "Probe once on avoidance, then move on — do not badger. "
+        "No motivational language. No fluff. Peer register throughout."
+    )
     return "\n".join(lines)
