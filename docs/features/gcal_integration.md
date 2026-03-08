@@ -1,15 +1,18 @@
 # gcal_integration.md — Google Calendar Integration
-*Phase 1 | Status: Complete*
+*Phase 1–2 | Status: Complete (read + write)*
 
 ---
 
-## Function
+## Functions
 
-`get_today_events()` in `integrations/gcal.py`
+| Function | Returns | Used by |
+|----------|---------|---------|
+| `get_today_events()` | `list[str]` — formatted event strings | jade_briefing.py, jade_nightly.py |
+| `get_events_for_date(target_date)` | `list[dict]` — raw event dicts with `start_dt`, `end_dt`, `all_day` | jade_timeblock.py |
+| `create_event(title, start_dt, end_dt, description)` | `str \| None` — created event id | jade_timeblock.py |
+| `delete_jade_events_for_date(target_date)` | `int` — count deleted | jade_timeblock.py (revise flow) |
 
-Returns a sorted list of today's events from all configured calendars.
-Format: `"9:00 AM — Math class"` (timed) or `"All day — No School"` (all-day).
-Returns `[]` on zero events or any error. Never raises.
+All functions never raise — log errors to stderr and return safe defaults.
 
 ## Calendars
 
@@ -17,31 +20,31 @@ Returns `[]` on zero events or any error. Never raises.
 _CALENDARS = ["spencerchatch@gmail.com", "spencerhatch@seattleacademy.org"]
 ```
 
-Both calendars are fetched independently. If one fails, the error is logged to stderr
-and skipped — the other calendar's events are still returned.
+Read: both calendars. Write: `spencerchatch@gmail.com` only.
+Jade events are identified by `description.startswith("jade:")`.
 
 ## Auth
 
 - **Type:** OAuth 2.0 (not API key)
-- **Scope:** `https://www.googleapis.com/auth/calendar.readonly`
+- **Scope:** `https://www.googleapis.com/auth/calendar.events` (read + write)
 - **Credentials:** `~/.config/jade/credentials.json` (never committed)
 - **Token:** `~/.config/jade/token.json` (auto-generated on first run)
 - **First run:** Opens browser for auth flow. Must be done manually before loading launchd plist.
 - **Token refresh:** Automatic when expired, if refresh token exists.
 
+## Event Colors
+
+`_event_color_id(title)` returns a GCal colorId based on title keywords:
+- ACT/math prep/science prep → `"2"` (sage/green)
+- Wellbeing/WTT/CRM/intern → `"5"` (banana/yellow)
+- Lacrosse/practice → `"6"` (tangerine/orange)
+- Default → no color override
+
 ## Time Handling
 
-- Google API returns UTC datetimes — all converted to `America/Los_Angeles` before display
-- All-day events have `date` field (not `dateTime`) — handled separately
-- Time format: `"%-I:%M %p"` → `"9:00 AM"` (macOS/Linux only)
-- Query window: today midnight → tomorrow midnight (LA time)
-
-## Phase 2 Upgrade Required
-
-Phase 2 (time-blocking) needs write access. To upgrade scope:
-1. Delete `~/.config/jade/token.json`
-2. Update `_SCOPES` in `gcal.py` to include `calendar.events`
-3. Re-run auth flow: `python3 -c "from integrations.gcal import get_today_events; get_today_events()"`
+- All datetimes converted to `America/Los_Angeles` (`_TZ`)
+- All-day events: `start_dt = end_dt = None`, `all_day = True`
+- Time format for display: `"%-I:%M %p"` → `"9:00 AM"` (macOS/Linux only)
 
 ## Known Issue
 

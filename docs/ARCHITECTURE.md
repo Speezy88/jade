@@ -1,5 +1,5 @@
 # ARCHITECTURE.md
-*Last updated: 2026-03-07 | Phase 1.5 complete*
+*Last updated: 2026-03-08 | Phase 2 complete*
 
 ---
 
@@ -25,15 +25,15 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
          Anthropic API (Haiku)          Anthropic API (Haiku, multi-turn)
                 │                                  │
                 ▼                                  ▼
-         jade_briefing.py               jade_nightly.py
-         stdout + chat loop             interactive terminal (5 phases A→E)
-                │                          │
-         extract_morning_context()  extract_structured() → nightly log
-                │                   + tomorrow_context.json
-         morning_context.json            │
-         (fallback: logs/morning/)  launchd (9:15pm/8:45pm via osascript)
-                │
-         launchd (7am)
+         jade_briefing.py         jade_nightly.py              jade_timeblock.py
+         stdout + chat loop       interactive (5 phases A→E)   terminal proposal + write
+                │                        │                             │
+         extract_morning_context  extract_structured()          GCal write (create_event)
+                │                 → nightly log                  + delete_jade_events_for_date (on revise)
+         morning_context.json     + tomorrow_context.json        → duration_signals.jsonl
+         (fallback: logs/morning) launchd (9:15pm/8:45pm)        → logs/timeblock/YYYY-MM-DD.json
+                │                        │
+         launchd (7am)            post-Phase-E → jade_timeblock.py (on confirm)
 ```
 
 ---
@@ -42,13 +42,13 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 
 | File | Role | Phase |
 |------|------|-------|
-| `jade_prompts.py` | Single source of truth for system prompt assembly. `build_system_prompt(context)` for briefing; `build_nightly_system_prompt(context)` for nightly check-in. No other file assembles prompts. | 1 |
+| `jade_prompts.py` | Single source of truth for system prompt assembly. `build_system_prompt(context)` for briefing/chat; `build_nightly_system_prompt(context)` for nightly check-in; `build_timeblock_system_prompt(context)` for time-blocking. No other file assembles prompts. | 1 |
 | `jade_briefing.py` | Morning briefing entry point. Calls all integrations, loads nightly context, builds prompt, calls Haiku, prints briefing. After print: interactive chat loop (max 10 turns, Jade-driven closure). Post-chat: `extract_morning_context()` → `memory/cache/morning_context.json`. Fires notification after chat completes. Falls back to `memory/logs/morning/` transcript on extraction failure. Called by launchd at 7am. | 1 |
 | `jade_nightly.py` | Nightly interactive check-in. Five-phase conversation (A→E). Post-session structured extraction to `memory/logs/nightly/` and `memory/cache/tomorrow_context.json`. Hardened extraction: strips markdown fences, logs raw response on failure, writes transcript fallback. Called by launchd via osascript at 9:15pm (weekdays) / 8:45pm (weekends). | 1.5 |
+| `jade_timeblock.py` | Calendar time-blocking entry point. Fetches GCal events, computes free windows (with school/lacrosse buffers), calls Haiku for schedule proposal, adjustment loop (max 3 rounds), writes confirmed blocks to GCal via `create_event()`. Deletes prior Jade blocks on revise. Logs duration overrides to `duration_signals.jsonl`. Triggered by `/timeblock` or post-nightly prompt. | 2 |
 | `jade_router.py` | Task routing logic — local vs cloud model selection. Not yet built. | Planned |
-| `jade_timeblock.py` | Time-blocked schedule generation. Not yet built. | 2 |
 | `integrations/weather.py` | OpenWeatherMap free tier. `get_weather()` → formatted string. Never raises. | 1 |
-| `integrations/gcal.py` | Google Calendar OAuth2. `get_today_events()` → list of strings. Fetches from `spencerchatch@gmail.com` and `spencerhatch@seattleacademy.org`. Merges and sorts by start time. Never raises. | 1 |
+| `integrations/gcal.py` | Google Calendar OAuth2 (`calendar.events` scope). `get_today_events()` → formatted strings. `get_events_for_date(date)` → raw event dicts with start/end datetimes. `create_event(title, start, end, desc)` → writes to personal calendar, returns event id. `delete_jade_events_for_date(date)` → removes prior Jade blocks (filtered by `jade:` description prefix). Never raises. | 1–2 |
 | `integrations/schoology.py` | Schoology ICS feed. `get_upcoming_assignments()` → list of strings. 6h cache at `memory/cache/schoology.json`. Never raises. | 1 |
 | `scripts/check_doc_staleness.py` | Nightly doc staleness check via launchd at 10pm. Notifies if PROJECT_STATUS.md or CHANGELOG.md are stale after a dev session. | 0 |
 | `SOUL.md` | Jade's behavioral identity. Injected into every prompt via `build_system_prompt()`. Protected — requires explicit approval to modify. | 0 |
@@ -73,6 +73,17 @@ SOUL.md
 
 Sections joined by `\n\n---\n\n`. No prompt assembly happens anywhere else in the codebase.
 
+`build_timeblock_system_prompt(context: dict)` in `jade_prompts.py`:
+
+```
+SOUL.md
+  + AI_STEERING_RULES.md (optional)
+  + memory/ACTIVE_GOALS.md
+  + ## BRIEFING TONE
+  + ## TIMEBLOCK CONTEXT (target date, hard constraints, free windows, priorities, assignments)
+  + ## TIMEBLOCK INSTRUCTIONS (JSON schema, constraints, CRITICAL enforcement)
+```
+
 `build_nightly_system_prompt(context: dict)` in `jade_prompts.py`:
 
 ```
@@ -95,9 +106,11 @@ SOUL.md
 
 ### integrations/gcal.py
 - **Input:** OAuth token at `~/.config/jade/token.json`, credentials at `~/.config/jade/credentials.json`
-- **Calendars:** `spencerchatch@gmail.com`, `spencerhatch@seattleacademy.org`
-- **Output:** `["9:00 AM — Math class", "All day — No School"]` or `[]`
-- **Failure mode:** Per-calendar errors logged to stderr, skipped. Full failure returns `[]`. Never raises.
+- **Scope:** `https://www.googleapis.com/auth/calendar.events` (read + write)
+- **Calendars (read):** `spencerchatch@gmail.com`, `spencerhatch@seattleacademy.org`
+- **Calendar (write):** `spencerchatch@gmail.com` only
+- **Functions:** `get_today_events()` → formatted strings; `get_events_for_date(date)` → raw dicts; `create_event(title, start_dt, end_dt, description)` → event id; `delete_jade_events_for_date(date)` → deleted count
+- **Failure mode:** All functions log to stderr and return safe defaults (`[]`, `None`, `0`). Never raises.
 
 ### integrations/schoology.py
 - **Input:** `SCHOOLOGY_ICS_URL` from `.env`, cache at `memory/cache/schoology.json`
@@ -136,6 +149,8 @@ Logs:
 - `logs/staleness.log` — append-only staleness events
 - `memory/logs/nightly/YYYY-MM-DD.md` — nightly check-in structured log
 - `memory/logs/morning/YYYY-MM-DD.md` — morning chat fallback transcript (when extraction fails)
+- `memory/logs/timeblock/YYYY-MM-DD.json` — timeblock run log: proposed blocks, written count, override count, conflicts
+- `memory/logs/duration_signals.jsonl` — one line per duration override; seeds Phase 5.5 time model
 - `memory/cache/tomorrow_context.json` — nightly context passed to next morning's briefing
 - `memory/cache/morning_context.json` — morning chat extraction; schema: `{date, schedule_additions, adjustments, focus, notes}`
 
@@ -151,7 +166,6 @@ Logs:
 ## Not Yet Built (Planned)
 
 - `jade_router.py` — model routing (local vs cloud)
-- `jade_timeblock.py` — time-blocking (Phase 2)
 - Signal system — ratings.jsonl, FAILURES/ (Phase 3)
 - ChromaDB semantic memory (Phase 9)
 - Multi-agent orchestration (Phase 10)

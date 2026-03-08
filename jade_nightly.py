@@ -284,6 +284,7 @@ def run(force: bool = False) -> None:
     print("\n" + "━" * 50 + "\n")
 
     # ── Post-session: extract + write files ───────────────────────────
+    raw_response = None
     try:
         structured, raw_response = extract_structured(client, history)
         write_nightly_log(structured)
@@ -291,11 +292,22 @@ def run(force: bool = False) -> None:
         print(f"[jade_nightly] Log written: memory/logs/nightly/{today.isoformat()}.md")
     except Exception as exc:
         print(f"[jade_nightly] WARNING: extraction failed ({exc})", file=sys.stderr)
-        try:
+        if raw_response is not None:
             print(f"[jade_nightly] Raw extraction response: {raw_response!r}", file=sys.stderr)
-        except NameError:
-            pass  # API call failed before raw_response was assigned
         _write_transcript_fallback(history, today)
+
+    # ── Post-nightly: offer to block tomorrow ─────────────────────────
+    print("\nWant me to block tomorrow? [yes / skip]")
+    try:
+        answer = input("> ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        answer = ""
+    if answer in {"yes", "y", "yep", "yeah", "sure", "do it"}:
+        import subprocess
+        subprocess.run(
+            ["python3", "/Users/spencerhatch/Jade/jade_timeblock.py"],
+            check=False,
+        )
 
 
 if __name__ == "__main__":

@@ -3,6 +3,27 @@
 
 ---
 
+## 2026-03-08 — Phase 2 complete: Calendar Time-Blocking
+
+`jade_timeblock.py` is operational. Fetches GCal events, computes free windows (with
+school/lacrosse buffers and 15-min padding on long events), calls Haiku to generate a
+JSON schedule proposal, presents it in the terminal with an adjustment loop (max 3 rounds,
+natural-language edits via Haiku), then writes confirmed blocks to Google Calendar via
+`create_event()`. On revise, `delete_jade_events_for_date()` removes prior Jade blocks
+before rebuilding. Duration overrides append to `duration_signals.jsonl` to seed Phase 5.5.
+Unscheduled/buffer blocks are filtered at write time (display-only). `jade_nightly.py`
+updated with a post-Phase-E "Want me to block tomorrow?" prompt. `integrations/gcal.py`
+upgraded from `calendar.readonly` to `calendar.events` scope with three new functions.
+`jade_prompts.py` extended with `build_timeblock_system_prompt()`.
+
+Files changed:
+- `jade_timeblock.py` — added (Phase 2 entry point)
+- `integrations/gcal.py` — scope upgrade + `get_events_for_date()`, `create_event()`, `delete_jade_events_for_date()`
+- `jade_prompts.py` — added `build_timeblock_system_prompt()`, `_format_timeblock_context()`, `_TIMEBLOCK_INSTRUCTIONS`
+- `jade_nightly.py` — added post-Phase-E timeblock prompt
+
+---
+
 ## 2026-03-07 — Briefing chat tail + conversational tone
 
 Added an interactive chat loop to `jade_briefing.py` that runs after the morning briefing

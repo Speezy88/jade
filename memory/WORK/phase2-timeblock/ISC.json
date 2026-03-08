@@ -1,0 +1,15 @@
+[
+  {"id": 1, "criterion": "OAuth re-auth completed with calendar.events scope — read and write both verified", "status": "pending"},
+  {"id": 2, "criterion": "jade_timeblock.py runs standalone and produces a valid JSON proposal", "status": "pending"},
+  {"id": 3, "criterion": "Proposal correctly excludes existing GCal events as hard constraints", "status": "pending"},
+  {"id": 4, "criterion": "ACT prep block duration matches ACTIVE_GOALS.md stated commitment (30 min)", "status": "pending"},
+  {"id": 5, "criterion": "Haiku estimates for non-fixed tasks include stated reasoning in basis field", "status": "pending"},
+  {"id": 6, "criterion": "Spencer can override duration in natural language and proposal updates correctly", "status": "pending"},
+  {"id": 7, "criterion": "Override appends one line to duration_signals.jsonl with correct schema", "status": "pending"},
+  {"id": 8, "criterion": "Confirmed blocks appear in Google Calendar within 30 seconds of confirmation", "status": "pending"},
+  {"id": 9, "criterion": "GCal events have correct title, description metadata, and land on personal calendar only", "status": "pending"},
+  {"id": 10, "criterion": "Post-nightly prompt triggers jade_timeblock.py on confirm", "status": "pending"},
+  {"id": 11, "criterion": "Declining post-nightly prompt closes nightly cleanly with no side effects", "status": "pending"},
+  {"id": 12, "criterion": "memory/logs/timeblock/YYYY-MM-DD.json written after every successful run", "status": "pending"},
+  {"id": 13, "criterion": "SOUL.md tone holds — proposal reads like Jade, not a calendar app", "status": "pending"}
+]

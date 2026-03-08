@@ -1,11 +1,11 @@
 # PROJECT_STATUS.md
-*Last updated: 2026-03-07*
+*Last updated: 2026-03-08*
 
 ---
 
-## Current Phase: 2 — Calendar Time-Blocking
+## Current Phase: 3 — Signal System
 
-Phases 1 and 1.5 are complete and operational.
+Phases 1, 1.5, and 2 are complete and operational.
 
 ---
 
@@ -15,8 +15,8 @@ Phases 1 and 1.5 are complete and operational.
 |-------|-------------|--------|
 | 1 | Morning briefing — live Calendar + Schoology + Weather, launchd, SOUL.md | ✅ Complete |
 | 1.5 | Nightly check-in — `jade_nightly.py`, interactive 5-phase session | ✅ Complete |
-| 2 | Calendar time-blocking — `/timeblock` command, gcal read+write | **Current** |
-| 3 | Signal system — ratings.jsonl, FAILURES/, structured memory | Planned |
+| 2 | Calendar time-blocking — `/timeblock` command, gcal read+write | ✅ Complete |
+| 3 | Signal system — ratings.jsonl, FAILURES/, structured memory | **Current** |
 | 4 | Goal action plans + briefing check-ins | Planned |
 | 5 | Nightly briefing — day vs plan, gap analysis, streaks | Planned |
 | 5.5 | Task duration intelligence — Drive API + manual `/log` + time model | Planned |
@@ -29,7 +29,7 @@ Phases 1 and 1.5 are complete and operational.
 
 ---
 
-## What's Built (Phases 1 + 1.5)
+## What's Built (Phases 1 + 1.5 + 2)
 
 **Phase 1 + chat tail:**
 - `jade_briefing.py` — 7am briefing, live data + nightly context, Haiku, interactive chat loop (Jade-driven closure), `extract_morning_context()` → `morning_context.json`, notification post-chat
@@ -43,23 +43,26 @@ Phases 1 and 1.5 are complete and operational.
 - Core config: SOUL.md, AI_STEERING_RULES.md, AGENTS.md, ACTIVE_GOALS.md
 
 **Phase 1.5:**
-- `jade_nightly.py` — interactive 5-phase nightly check-in (A→E), structured extraction, log + context write
-- `launchd/com.jade.nightly.plist` — 9:15pm weekdays / 8:45pm weekends (pending `launchctl load`)
+- `jade_nightly.py` — interactive 5-phase nightly check-in (A→E), structured extraction, log + context write, post-Phase-E timeblock prompt
+- `launchd/com.jade.nightly.plist` — 9:15pm weekdays / 8:45pm weekends
+
+**Phase 2:**
+- `jade_timeblock.py` — free-window computation, Haiku schedule proposal, adjustment loop, GCal write, revise-with-delete, duration signal logging
+- `integrations/gcal.py` — upgraded to `calendar.events` scope; `get_events_for_date()`, `create_event()`, `delete_jade_events_for_date()`
+- `jade_prompts.py` — `build_timeblock_system_prompt()` + `_TIMEBLOCK_INSTRUCTIONS`
+- `memory/logs/timeblock/` — per-run JSON logs
+- `memory/logs/duration_signals.jsonl` — override signal capture (seeds Phase 5.5)
 
 ---
 
 ## Where to Start Next Session
 
-**Phase 2: `/timeblock` command**
+**Phase 3: Signal System**
 
-1. Add Google Calendar write scope (`calendar.events`) to gcal OAuth — re-auth required
-2. Build `jade_timeblock.py` — reads calendar, generates time-blocked schedule
-3. Wire `/timeblock` slash command in `.claude/commands/timeblock.md`
-4. Test: propose blocks, write to calendar, verify in Google Calendar
-
-**Hard constraint:** gcal OAuth currently has `calendar.readonly` scope.
-Phase 2 requires `calendar.events` (read+write). Will need to delete
-`~/.config/jade/token.json` and re-auth with expanded scope.
+1. Build `memory/LEARNING/SIGNALS/ratings.jsonl` capture — hook or manual entry
+2. Build `memory/LEARNING/FAILURES/` — full context capture for ratings ≤3
+3. Wire `rating_capture.py` hook (UserPromptSubmit) to auto-capture 1–10 ratings
+4. Build `/retro` command to trigger end-of-session loop with ratings prompt
 
 ---
 
@@ -70,6 +73,7 @@ Phase 2 requires `calendar.events` (read+write). Will need to delete
 - `jade_router.py` not yet built — all routing is hardcoded to cloud (Haiku/Sonnet)
 - No signal capture yet (Phase 3) — briefing quality ratings not being recorded
 - `memory/WORK/` task tracking not in use yet — ISC.json workflow manual only
+- `jade_timeblock.py` ISC-4/ISC-5 (ACT commitment auto-read from ACTIVE_GOALS.md, Haiku estimate basis) — not formally verified; works in practice via prompt injection
 
 ---
 

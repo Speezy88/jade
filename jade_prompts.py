@@ -98,6 +98,110 @@ def _format_context(ctx: dict) -> str:
     return "\n".join(lines)
 
 
+_TIMEBLOCK_INSTRUCTIONS = """\
+## TIMEBLOCK INSTRUCTIONS
+Build a time-blocked schedule using ONLY the free windows provided.
+Do not schedule into hard constraints (existing calendar events).
+ACT Math and Science prep: 30 min/day (from stated commitment in ACTIVE_GOALS.md).
+No deep work (math, essay, coding) in the 30 minutes immediately after lacrosse or practice ends.
+Leave at least one 20-minute unblocked window per evening.
+If tasks exceed available time, list the conflict in "conflicts" and ask which drops.
+Represent open/unscheduled time in the "unscheduled_windows" field only, not as blocks.
+Any block with "Unscheduled" in the title will be ignored by the write step.
+Label meal blocks by time of day: "Breakfast" before 10am, "Lunch" between 11am–2pm,
+"Afternoon break" between 2–5pm, "Dinner" after 5pm. Never label a block outside these
+windows with a meal name that doesn't match the time.
+
+Per block, include:
+  - title: task name
+  - start_iso / end_iso: ISO 8601 datetimes from the free window details provided
+  - duration_min: integer minutes
+  - basis: "from stated commitment" OR "estimated: [brief reason]"
+  - rationale: one-line explanation
+
+Return ONLY valid JSON. No prose. No code fences. Schema exactly:
+{"blocks": [{"title": "string", "start_iso": "string", "end_iso": "string", \
+"duration_min": 0, "basis": "string", "rationale": "string"}], \
+"unscheduled_windows": [{"start_iso": "string", "end_iso": "string", "duration_min": 0}], \
+"conflicts": ["string"]}
+
+CRITICAL: Respond with valid JSON only. No prose. No explanation. No markdown fences. \
+No text before or after the JSON object. First character must be {. Last character must be }. \
+Any text outside the JSON object will break the system."""
+
+
+def build_timeblock_system_prompt(context: dict) -> str:
+    """
+    Assemble system prompt for the timeblocking session.
+    Stack: SOUL + STEERING + GOALS + BRIEFING_TONE + timeblock context + instructions.
+    """
+    soul     = _load(SOUL_PATH, required=True)
+    steering = _load(STEERING_PATH, required=False)
+    goals    = _load(GOALS_PATH, required=True)
+
+    sections = [soul]
+    if steering:
+        sections.append(steering)
+    sections.append(goals)
+    sections.append(_BRIEFING_TONE)
+    sections.append(_format_timeblock_context(context))
+    sections.append(_TIMEBLOCK_INSTRUCTIONS)
+    return "\n\n---\n\n".join(sections)
+
+
+def _format_timeblock_context(ctx: dict) -> str:
+    lines = ["## TIMEBLOCK CONTEXT\n"]
+    if "target_date" in ctx:
+        lines.append(f"Target date: {ctx['target_date']}")
+
+    if ctx.get("hard_constraints"):
+        lines.append("\nExisting calendar events (hard constraints — do not schedule over):")
+        lines.extend(f"  • {e}" for e in ctx["hard_constraints"])
+    else:
+        lines.append("\nNo existing timed events.")
+
+    if ctx.get("all_day_events"):
+        lines.append("\nAll-day events (informational):")
+        lines.extend(f"  • {e}" for e in ctx["all_day_events"])
+
+    if ctx.get("free_windows"):
+        lines.append("\nAvailable time windows (use ONLY these):")
+        lines.extend(f"  • {w}" for w in ctx["free_windows"])
+    else:
+        lines.append("\nNo free windows available.")
+
+    if ctx.get("free_windows_raw"):
+        lines.append("\nFree window ISO details (use these for start_iso / end_iso in JSON):")
+        for w in ctx["free_windows_raw"]:
+            lines.append(f"  • start: {w['start_iso']}  end: {w['end_iso']}  ({w['duration_min']} min)")
+
+    if ctx.get("missed_nightly"):
+        lines.append("\nNote: No nightly check-in data. Use ACTIVE_GOALS.md commitments only.")
+    else:
+        if ctx.get("priorities"):
+            lines.append("\nTomorrow's priorities (from nightly check-in):")
+            lines.extend(f"  • {p}" for p in ctx["priorities"])
+        if ctx.get("stated_intentions"):
+            lines.append("\nStated intentions for tomorrow:")
+            lines.extend(f"  • {i}" for i in ctx["stated_intentions"])
+        if ctx.get("task_durations"):
+            lines.append("\nExplicit durations stated during nightly:")
+            for task, mins in ctx["task_durations"].items():
+                lines.append(f"  • {task}: {mins} min")
+
+    if ctx.get("schedule_additions"):
+        lines.append("\nSchedule additions from morning chat:")
+        lines.extend(f"  • {a}" for a in ctx["schedule_additions"])
+    if ctx.get("focus"):
+        lines.append(f"\nFocus for today: {ctx['focus']}")
+
+    if ctx.get("assignments"):
+        lines.append("\nSchoology assignments due (next 48h):")
+        lines.extend(f"  • {a}" for a in ctx["assignments"])
+
+    return "\n".join(lines)
+
+
 def build_nightly_system_prompt(context: dict) -> str:
     """
     Assemble system prompt for the nightly check-in session.
