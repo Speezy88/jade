@@ -1,9 +1,16 @@
 {
-  "date": "2026-03-07",
-  "priorities": [],
+  "date": "2026-04-10",
+  "priorities": [
+    "ACT Math \u2014 maintain momentum with 4 days remaining",
+    "ACT Science \u2014 one session to begin closing gap",
+    "Schoolwork due \u2014 scan calendar tonight for next week's assignments"
+  ],
   "stated_intentions": [
-    "clean my room, clean jacksons room."
+    "Continue ACT Math work tomorrow",
+    "Start ACT Science session"
   ],
   "open_loops": [],
-  "struggles_yesterday": []
+  "struggles_yesterday": [
+    "Schedule constraints limiting study time"
+  ]
 }

@@ -24,6 +24,7 @@ sys.path.insert(0, "/Users/spencerhatch/Jade")
 
 import anthropic
 from integrations.gcal import get_today_events
+from integrations.jade_notion import get_overdue_tasks, get_todays_tasks
 from integrations.schoology import get_upcoming_assignments
 from integrations.weather import get_weather
 from jade_prompts import build_system_prompt
@@ -115,6 +116,8 @@ def run() -> None:
     weather     = get_weather()
     events      = get_today_events()
     assignments = get_upcoming_assignments()
+    tasks_today = get_todays_tasks()
+    tasks_overdue = get_overdue_tasks()
 
     # 2. Assemble system prompt with runtime context
     context = {
@@ -122,6 +125,8 @@ def run() -> None:
         "weather":         weather,
         "calendar_events": events,
         "assignments":     assignments,
+        "tasks_today":     tasks_today,
+        "tasks_overdue":   tasks_overdue,
         **_load_nightly_context(),
     }
     system_prompt = build_system_prompt(context=context)

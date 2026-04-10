@@ -12,6 +12,7 @@ Usage:
 
 import argparse
 import json
+import signal
 import sys
 from datetime import date
 from pathlib import Path
@@ -22,6 +23,7 @@ sys.path.insert(0, "/Users/spencerhatch/Jade")
 
 import anthropic
 from integrations.gcal import get_today_events
+from integrations.jade_notion import get_overdue_tasks, get_todays_tasks
 from jade_prompts import build_nightly_system_prompt
 
 _JADE_DIR     = Path("/Users/spencerhatch/Jade")
@@ -29,6 +31,12 @@ _NIGHTLY_DIR  = _JADE_DIR / "memory" / "logs" / "nightly"
 _CONTEXT_PATH = _JADE_DIR / "memory" / "cache" / "tomorrow_context.json"
 _MODEL        = "claude-haiku-4-5-20251001"
 _MAX_TOKENS   = 1000
+_SENTINEL     = "[SESSION_COMPLETE]"
+
+
+def _timeout_handler(signum, frame):
+    print("\n[Session timed out — good night.]\n")
+    sys.exit(0)
 
 _EXTRACTION_SYSTEM = (
     "You are a structured data extractor. "
@@ -96,15 +104,21 @@ def chat(client: anthropic.Anthropic, system: str,
 
 
 def jade(text: str) -> None:
-    print(f"\nJade: {text}\n")
+    clean = text.replace(_SENTINEL, "").strip()
+    if clean:
+        print(f"\nJade: {clean}\n")
 
 
 def ask() -> str:
+    signal.alarm(600)          # start/reset 10-min inactivity countdown
     try:
-        return input("You: ").strip()
+        result = input("You: ").strip()
     except (EOFError, KeyboardInterrupt):
+        signal.alarm(0)
         print("\n[session interrupted]")
         return "__EXIT__"
+    signal.alarm(600)          # reset countdown after input received
+    return result
 
 
 def extract_structured(client: anthropic.Anthropic, history: list[dict]) -> tuple[dict, str]:
@@ -193,10 +207,12 @@ def run(force: bool = False) -> None:
         print("[jade_nightly] Already ran today — skipping. Use --now to override.")
         return
 
-    today       = date.today()
-    events      = get_today_events()
-    domains     = select_domains(events)
-    recent_logs = load_recent_logs(3)
+    today         = date.today()
+    events        = get_today_events()
+    domains       = select_domains(events)
+    recent_logs   = load_recent_logs(3)
+    tasks_today   = get_todays_tasks()
+    tasks_overdue = get_overdue_tasks()
 
     context = {
         "today":           today.strftime("%A, %B %-d"),
@@ -204,11 +220,15 @@ def run(force: bool = False) -> None:
         "domains":         domains,
         "recent_logs":     recent_logs,
         "days_to_act":     (date(2026, 4, 14) - today).days,
+        "tasks_today":     tasks_today,
+        "tasks_overdue":   tasks_overdue,
     }
 
     system  = build_nightly_system_prompt(context)
     client  = anthropic.Anthropic()
     history: list[dict] = []
+
+    signal.signal(signal.SIGALRM, _timeout_handler)
 
     print("\n" + "━" * 50)
     print("  Jade — Nightly Check-In")
@@ -220,6 +240,8 @@ def run(force: bool = False) -> None:
         "reference something specific from today's calendar, then ask "
         "how his highest-priority thing went today.")
     jade(opening)
+    if _SENTINEL in opening:
+        print("\nGood night.\n"); sys.exit(0)
 
     r1 = ask()
     if r1 == "__EXIT__": return
@@ -227,6 +249,8 @@ def run(force: bool = False) -> None:
     follow_up = chat(client, system, history, r1 +
         "\n[PHASE A continued] Ask what got in the way today, if anything.")
     jade(follow_up)
+    if _SENTINEL in follow_up:
+        print("\nGood night.\n"); sys.exit(0)
 
     r2 = ask()
     if r2 == "__EXIT__": return
@@ -237,6 +261,8 @@ def run(force: bool = False) -> None:
             f"\n[PHASE B - DOMAIN: {domain}] Ask 1-2 focused questions about "
             f"Spencer's progress on {domain}. Be specific, not generic.")
         jade(q)
+        if _SENTINEL in q:
+            print("\nGood night.\n"); sys.exit(0)
         r2 = ask()
         if r2 == "__EXIT__": return
 
@@ -245,6 +271,8 @@ def run(force: bool = False) -> None:
         "\n[PHASE C] Synthesize what you heard. Propose tomorrow's top 3 "
         "priorities, ranked. Ask Spencer to confirm, reject, or modify.")
     jade(priorities_turn)
+    if _SENTINEL in priorities_turn:
+        print("\nGood night.\n"); sys.exit(0)
 
     r_priorities = ask()
     if r_priorities == "__EXIT__": return
@@ -253,6 +281,8 @@ def run(force: bool = False) -> None:
         "\n[PHASE C continued] Ask: 'Anything specific you want to make "
         "sure happens tomorrow?'")
     jade(intentions_turn)
+    if _SENTINEL in intentions_turn:
+        print("\nGood night.\n"); sys.exit(0)
 
     r_intentions = ask()
     if r_intentions == "__EXIT__": return
@@ -270,6 +300,8 @@ def run(force: bool = False) -> None:
         "\n[PHASE D] Ask if there's anything unresolved Spencer wants to "
         "close before tomorrow, or if we're good. Keep it brief.")
     jade(loops_turn)
+    if _SENTINEL in loops_turn:
+        print("\nGood night.\n"); sys.exit(0)
 
     r_loops = ask()
     if r_loops == "__EXIT__": return
@@ -280,7 +312,18 @@ def run(force: bool = False) -> None:
         "day, say so plainly. If Spencer avoided something notable, name it "
         "briefly and close. No motivational fluff.")
     jade(closing)
+    if _SENTINEL in closing:
+        print("\nGood night.\n")
+    else:
+        # ── Post-Phase-E: wait for Spencer's ack ─────────────────────
+        r_final = ask()
+        if r_final not in ("", "__EXIT__"):
+            ack = chat(client, system, history, r_final)
+            jade(ack)
+            if _SENTINEL in ack:
+                print("\nGood night.\n")
 
+    signal.alarm(0)  # disable timeout before extraction API call
     print("\n" + "━" * 50 + "\n")
 
     # ── Post-session: extract + write files ───────────────────────────
@@ -308,6 +351,8 @@ def run(force: bool = False) -> None:
             ["python3", "/Users/spencerhatch/Jade/jade_timeblock.py"],
             check=False,
         )
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":

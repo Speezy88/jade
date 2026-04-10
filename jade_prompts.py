@@ -9,6 +9,7 @@ No API calls. No side effects. Pure file reads and string assembly.
 """
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 JADE_DIR      = Path("/Users/spencerhatch/Jade")
@@ -67,6 +68,43 @@ def build_system_prompt(context: dict | None = None) -> str:
     return "\n\n---\n\n".join(sections)
 
 
+_PRIORITY_LABEL = {
+    "🔴 High":   "🔴 [High]",
+    "🟡 Medium": "🟡 [Med] ",
+    "🟢 Low":    "🟢 [Low] ",
+}
+
+
+def _format_task_line(task: dict) -> str:
+    """Format a task dict as a single briefing line."""
+    label    = _PRIORITY_LABEL.get(task.get("priority") or "", "   [?]  ")
+    name     = task.get("name") or "Untitled"
+    parts    = [f"{label} {name}"]
+
+    duration = task.get("duration")
+    if duration:
+        parts.append(f"{duration} mins")
+
+    energy = task.get("energy") or ""
+    # Strip leading emoji from "🔵 Deep Work" → "Deep Work"
+    energy_clean = energy.split(" ", 1)[-1] if energy else ""
+    if energy_clean:
+        parts.append(f"({energy_clean})")
+
+    due = task.get("due") or ""
+    if "T" in due:
+        try:
+            # ISO datetime with offset — parse and format as "due H:MMam/pm"
+            dt = datetime.fromisoformat(due)
+            parts.append(f"due {dt.strftime('%-I:%M%p').lower()}")
+        except ValueError:
+            pass
+    else:
+        parts.append("anytime")
+
+    return " — ".join(parts)
+
+
 def _format_context(ctx: dict) -> str:
     lines = ["## RUNTIME CONTEXT\n"]
     if "today" in ctx:
@@ -87,6 +125,17 @@ def _format_context(ctx: dict) -> str:
             lines.extend(f"  • {a}" for a in asgn)
         else:
             lines.append("\nAssignments: None due in the next 48 hours.")
+    if "tasks_today" in ctx:
+        tasks = ctx["tasks_today"]
+        if tasks:
+            lines.append("\nToday's tasks:")
+            lines.extend(f"  {_format_task_line(t)}" for t in tasks)
+        else:
+            lines.append("\nToday's tasks: none scheduled.")
+    if ctx.get("tasks_overdue"):
+        lines.append("\nOverdue (not yet done):")
+        for t in ctx["tasks_overdue"]:
+            lines.append(f"  ⚠️  {t['name']} — was due {t['due']}")
     if ctx.get("missed_nightly"):
         lines.append("\nNote: No check-in last night.")
     if ctx.get("priorities"):
@@ -202,6 +251,17 @@ def _format_timeblock_context(ctx: dict) -> str:
     return "\n".join(lines)
 
 
+_NIGHTLY_CLOSE_PROTOCOL = """\
+## NIGHTLY CLOSE PROTOCOL
+After you deliver Phase E (the send-off), append [SESSION_COMPLETE] on its own line
+at the very end of your message. This token is machine-readable and will be stripped
+before display. Do not explain or reference it.
+
+Exit intent detection: if Spencer's input at any point AFTER Phase E is any of —
+"stop", "done", "bye", "exit", "quit", "ok", "k", "great", "good night", "night",
+"thanks", "thank you" — respond ONLY with [SESSION_COMPLETE], nothing else."""
+
+
 def build_nightly_system_prompt(context: dict) -> str:
     """
     Assemble system prompt for the nightly check-in session.
@@ -216,6 +276,7 @@ def build_nightly_system_prompt(context: dict) -> str:
         sections.append(steering)
     sections.append(goals)
     sections.append(_format_nightly_context(context))
+    sections.append(_NIGHTLY_CLOSE_PROTOCOL)
     return "\n\n---\n\n".join(sections)
 
 
@@ -234,6 +295,14 @@ def _format_nightly_context(ctx: dict) -> str:
             lines.append("\nCalendar: No events today.")
     if "domains" in ctx:
         lines.append(f"\nDomains to probe tonight: {', '.join(ctx['domains'])}")
+    if "tasks_today" in ctx:
+        tasks = ctx["tasks_today"]
+        if tasks:
+            lines.append("\nToday's tasks (reference these by name when asking about Spencer's work):")
+            lines.extend(f"  {_format_task_line(t)}" for t in tasks)
+    if ctx.get("tasks_overdue"):
+        lines.append("\nOverdue tasks to follow up on:")
+        lines.extend(f"  ⚠️  {t['name']} — was due {t['due']}" for t in ctx["tasks_overdue"])
     if ctx.get("recent_logs"):
         lines.append("\n## Recent Nightly Logs (last 3 nights — for continuity)\n")
         lines.append(ctx["recent_logs"])
