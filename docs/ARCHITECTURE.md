@@ -1,5 +1,5 @@
 # ARCHITECTURE.md
-*Last updated: 2026-03-08 | Phase 2 complete*
+*Last updated: 2026-04-10 | Phase 2.5 complete*
 
 ---
 
@@ -9,11 +9,13 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 **live data → context → system prompt → Haiku → output**.
 
 ```
-.env (keys)
-    │
-    ├── integrations/weather.py   → weather string
-    ├── integrations/gcal.py      → calendar event list
-    └── integrations/schoology.py → assignment list (cached)
+.env (keys)                        ~/.config/jade/credentials       memory/notion_ids.json
+    │                                          │                                  │
+    ├── integrations/weather.py   → weather string                               │
+    ├── integrations/gcal.py      → calendar event list                          │
+    ├── integrations/schoology.py → assignment list (cached)                     │
+    └── integrations/jade_notion.py ←─────────────────────────────────────────────┘
+              → tasks_today (sorted dicts), tasks_overdue
                 │
                 ▼
          jade_prompts.py
@@ -46,6 +48,8 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 | `jade_briefing.py` | Morning briefing entry point. Calls all integrations, loads nightly context, builds prompt, calls Haiku, prints briefing. After print: interactive chat loop (max 10 turns, Jade-driven closure). Post-chat: `extract_morning_context()` → `memory/cache/morning_context.json`. Fires notification after chat completes. Falls back to `memory/logs/morning/` transcript on extraction failure. Called by launchd at 7am. | 1 |
 | `jade_nightly.py` | Nightly interactive check-in. Five-phase conversation (A→E). Post-session structured extraction to `memory/logs/nightly/` and `memory/cache/tomorrow_context.json`. Hardened extraction: strips markdown fences, logs raw response on failure, writes transcript fallback. Called by launchd via osascript at 9:15pm (weekdays) / 8:45pm (weekends). | 1.5 |
 | `jade_timeblock.py` | Calendar time-blocking entry point. Fetches GCal events, computes free windows (with school/lacrosse buffers), calls Haiku for schedule proposal, adjustment loop (max 3 rounds), writes confirmed blocks to GCal via `create_event()`. Deletes prior Jade blocks on revise. Logs duration overrides to `duration_signals.jsonl`. Triggered by `/timeblock` or post-nightly prompt. | 2 |
+| `jade_setup.py` | One-time Notion workspace setup. Creates all 6 databases (Tasks, Projects, Research Vault, Skills, Practice Log, Opportunities) via Notion API with correct schemas and relations. Writes DB IDs to `memory/notion_ids.json`. `--check` validates accessibility and relation targets. `--force` rebuilds. Run once before Phase 2.5; not called at runtime. | 2.5 |
+| `integrations/jade_notion.py` | Notion API integration — task queries and writes. `get_todays_tasks()`, `get_upcoming_tasks(n)`, `get_overdue_tasks()` → sorted task dicts. `create_task()`, `update_task_status()`, `create_recurring_task()` (bulk-creates daily child instances with chunk math: `ceil(total/chunk)` instances, `end = start + n - 1` days). Uses urllib only (no requests — macOS Python.org SSL workaround). Credentials from `~/.config/jade/credentials`, DB IDs from `memory/notion_ids.json`. Never raises. | 2.5 |
 | `jade_router.py` | Task routing logic — local vs cloud model selection. Not yet built. | Planned |
 | `integrations/weather.py` | OpenWeatherMap free tier. `get_weather()` → formatted string. Never raises. | 1 |
 | `integrations/gcal.py` | Google Calendar OAuth2 (`calendar.events` scope). `get_today_events()` → formatted strings. `get_events_for_date(date)` → raw event dicts with start/end datetimes. `create_event(title, start, end, desc)` → writes to personal calendar, returns event id. `delete_jade_events_for_date(date)` → removes prior Jade blocks (filtered by `jade:` description prefix). Never raises. | 1–2 |
@@ -68,7 +72,8 @@ SOUL.md
   + memory/ACTIVE_GOALS.md
   + ## BRIEFING TONE (conversational register + chat closure instruction)
   + ## RUNTIME CONTEXT (if context dict provided)
-      today, weather, calendar_events, assignments
+      today, weather, calendar_events, assignments,
+      tasks_today (sorted by priority→time), tasks_overdue
 ```
 
 Sections joined by `\n\n---\n\n`. No prompt assembly happens anywhere else in the codebase.
@@ -91,7 +96,9 @@ SOUL.md
   + AI_STEERING_RULES.md (optional)
   + memory/ACTIVE_GOALS.md
   + ## NIGHTLY SESSION CONTEXT
-      today, days_to_act, calendar_events, domains, recent_logs (last 3 nights)
+      today, days_to_act, calendar_events, domains,
+      tasks_today (for by-name reference during check-in), tasks_overdue,
+      recent_logs (last 3 nights)
   + Nightly Session Structure instructions
 ```
 
@@ -112,6 +119,14 @@ SOUL.md
 - **Functions:** `get_today_events()` → formatted strings; `get_events_for_date(date)` → raw dicts; `create_event(title, start_dt, end_dt, description)` → event id; `delete_jade_events_for_date(date)` → deleted count
 - **Failure mode:** All functions log to stderr and return safe defaults (`[]`, `None`, `0`). Never raises.
 
+### integrations/jade_notion.py
+- **Input:** `NOTION_API_KEY` from `~/.config/jade/credentials`; DB IDs from `memory/notion_ids.json`
+- **HTTP:** `urllib` + `ssl._create_unverified_context()` — no `requests` (macOS Python.org SSL workaround)
+- **Query functions:** `get_todays_tasks()`, `get_upcoming_tasks(n)`, `get_overdue_tasks()` → `list[dict]` sorted by priority then due time
+- **Write functions:** `create_task()` → page ID; `update_task_status()` → bool; `create_recurring_task()` → list of page IDs (parent + children)
+- **Task dict schema:** `{id, name, priority, due, energy, duration, status, area, recurring, chunk_size, total_target, rec_start, rec_end}`
+- **Failure mode:** All functions catch all exceptions, log to stderr, return `[]` / `None` / `False`. Never raises.
+
 ### integrations/schoology.py
 - **Input:** `SCHOOLOGY_ICS_URL` from `.env`, cache at `memory/cache/schoology.json`
 - **Cache TTL:** 6 hours
@@ -129,6 +144,8 @@ SOUL.md
 | `SCHOOLOGY_ICS_URL` | `~/Jade/.env` | ICS feed URL (https://, not webcal://) |
 | Google OAuth credentials | `~/.config/jade/credentials.json` | Never committed |
 | Google OAuth token | `~/.config/jade/token.json` | Auto-generated on first auth |
+| `NOTION_API_KEY` | `~/.config/jade/credentials` | Notion internal integration secret |
+| `NOTION_PARENT_PAGE_ID` | `~/.config/jade/credentials` | Used by `jade_setup.py` only; not needed at runtime |
 
 ---
 
@@ -153,6 +170,7 @@ Logs:
 - `memory/logs/duration_signals.jsonl` — one line per duration override; seeds Phase 5.5 time model
 - `memory/cache/tomorrow_context.json` — nightly context passed to next morning's briefing
 - `memory/cache/morning_context.json` — morning chat extraction; schema: `{date, schedule_additions, adjustments, focus, notes}`
+- `memory/notion_ids.json` — Notion DB IDs written by `jade_setup.py`; read by `jade_notion.py` at runtime
 
 ### Local Cluster (not yet integrated)
 

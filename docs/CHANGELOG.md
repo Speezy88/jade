@@ -3,6 +3,45 @@
 
 ---
 
+## 2026-04-10 — Phase 2.5 complete: Notion Task Layer + nightly exit fix
+
+**Notion workspace setup (`jade_setup.py`):** One-time script that creates all 6 Notion
+databases (Tasks, Projects, Research Vault, Skills, Practice Log, Opportunities) via Notion
+API with correct schemas and cross-DB relations in dependency order. Writes all DB IDs to
+`memory/notion_ids.json`. `--check` mode validates each DB is accessible and every relation
+property points to the correct target DB ID (catches stale IDs after `--force` re-runs).
+Uses urllib exclusively — `requests` was found to return 401 on valid Notion API calls on
+this machine; `ssl._create_unverified_context()` works around macOS Python.org SSL cert issue.
+
+**Notion task layer (`integrations/jade_notion.py`):** `get_todays_tasks()`,
+`get_upcoming_tasks(n)`, `get_overdue_tasks()` query the Tasks DB and return sorted task
+dicts (priority → due time). `create_task()`, `update_task_status()`, and
+`create_recurring_task()` handle writes. Recurrence: `ceil(total_target / chunk_size)` daily
+child instances, `end = start + n − 1` days. Credentials from `~/.config/jade/credentials`,
+DB IDs from `memory/notion_ids.json`. All functions catch exceptions and return safe defaults.
+
+**Briefing + nightly wired:** `jade_briefing.py` now fetches `tasks_today` and
+`tasks_overdue` at 7am; both are injected into the system prompt via `jade_prompts.py`'s
+updated `_format_context()`. `jade_nightly.py` injects the same data so Jade references
+tasks by name during check-in. `jade_prompts.py` gained `_format_task_line()` and the
+`_NIGHTLY_CLOSE_PROTOCOL` sentinel system for clean session exits.
+
+**Nightly exit hardening:** `jade_nightly.py` gained a `[SESSION_COMPLETE]` sentinel
+protocol — Jade appends it after Phase E and on detecting close signals; the loop strips
+it before display and calls `sys.exit(0)`. 10-minute inactivity timeout via
+`signal.SIGALRM`. Post-Phase-E ack turn added. `sys.exit(0)` at run end.
+
+Files changed:
+- `jade_setup.py` — added (one-time Notion workspace setup)
+- `integrations/jade_notion.py` — added (task queries + writes)
+- `jade_briefing.py` — added jade_notion import, tasks_today + tasks_overdue to context
+- `jade_nightly.py` — added jade_notion wiring; sentinel exit protocol; signal timeout
+- `jade_prompts.py` — `_format_task_line()`, tasks in `_format_context()` + `_format_nightly_context()`, `_NIGHTLY_CLOSE_PROTOCOL`
+- `memory/notion_ids.json` — added (written by jade_setup.py)
+- `docs/ARCHITECTURE.md` — Notion data flow, new file entries, prompt assembly, credentials
+
+---
+
 ## 2026-03-08 — Phase 2 complete: Calendar Time-Blocking
 
 `jade_timeblock.py` is operational. Fetches GCal events, computes free windows (with
