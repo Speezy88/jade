@@ -27,15 +27,24 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
          Anthropic API (Haiku)          Anthropic API (Haiku, multi-turn)
                 │                                  │
                 ▼                                  ▼
-         jade_briefing.py         jade_nightly.py              jade_timeblock.py
-         stdout + chat loop       interactive (5 phases A→E)   terminal proposal + write
-                │                        │                             │
-         extract_morning_context  extract_structured()          GCal write (create_event)
-                │                 → nightly log                  + delete_jade_events_for_date (on revise)
-         morning_context.json     + tomorrow_context.json        → duration_signals.jsonl
-         (fallback: logs/morning) launchd (9:15pm/8:45pm)        → logs/timeblock/YYYY-MM-DD.json
-                │                        │
-         launchd (7am)            post-Phase-E → jade_timeblock.py (on confirm)
+         jade_briefing.py         jade_nightly.py (pure script — no LLM)
+         stdout + chat loop         Part 1: get_todays_tasks() → yes/no → update_task_status()
+                │                   Part 3: get_upcoming_tasks(1) → addition prompt
+         extract_morning_context       → tomorrow_context.json + nightly log
+                │                   launchd (9:15pm/8:45pm)
+         morning_context.json            │
+         (fallback: logs/morning)   post-nightly: offer jade_timeblock.py
+                │
+         launchd (7am)
+
+         jade_timeblock.py — terminal proposal + write
+                │
+         GCal write (create_event) + delete_jade_events_for_date (on revise)
+                │
+         → duration_signals.jsonl + logs/timeblock/YYYY-MM-DD.json
+
+         jade_ingest.py — standalone bulk ingest
+         raw text paste → Haiku (single-turn) → preview → create_task()
 ```
 
 ---
@@ -46,7 +55,8 @@ Jade is a personal AI infrastructure for Spencer Hatch. The core pattern:
 |------|------|-------|
 | `jade_prompts.py` | Single source of truth for system prompt assembly. `build_system_prompt(context)` for briefing/chat; `build_nightly_system_prompt(context)` for nightly check-in; `build_timeblock_system_prompt(context)` for time-blocking. No other file assembles prompts. | 1 |
 | `jade_briefing.py` | Morning briefing entry point. Calls all integrations, loads nightly context, builds prompt, calls Haiku, prints briefing. After print: interactive chat loop (max 10 turns, Jade-driven closure). Post-chat: `extract_morning_context()` → `memory/cache/morning_context.json`. Fires notification after chat completes. Falls back to `memory/logs/morning/` transcript on extraction failure. Called by launchd at 7am. | 1 |
-| `jade_nightly.py` | Nightly interactive check-in. Five-phase conversation (A→E). Post-session structured extraction to `memory/logs/nightly/` and `memory/cache/tomorrow_context.json`. Hardened extraction: strips markdown fences, logs raw response on failure, writes transcript fallback. Called by launchd via osascript at 9:15pm (weekdays) / 8:45pm (weekends). | 1.5 |
+| `jade_nightly.py` | Nightly operational review — pure script, no LLM. **Part 1:** iterates over `get_todays_tasks()`, one yes/no per incomplete task → `update_task_status()`. **Part 3:** lists tomorrow's tasks from `get_upcoming_tasks(1)`, one free-text addition → writes `memory/cache/tomorrow_context.json` (soft context only — no task keys) + `memory/logs/nightly/YYYY-MM-DD.md`. Part 2 (Project Next Action) deferred to Phase 2.6. 5-min session timeout via `signal.alarm(300)`. Post-nightly: offers to trigger `jade_timeblock.py`. Called by launchd via osascript at 9:15pm (weekdays) / 8:45pm (weekends). | 1.5 |
+| `jade_ingest.py` | Bulk Notion ingest from raw text. Collects multi-line paste input, calls Haiku (single-turn) to classify into tasks/projects, prints preview, confirms with Spencer, calls `create_task()` for each task. Projects displayed but skipped (Phase 2.6 — `create_project()` not yet built). Uses `claude-haiku-4-5-20251001`. Standalone; not called by launchd. | 2.5 |
 | `jade_timeblock.py` | Calendar time-blocking entry point. Fetches GCal events, computes free windows (with school/lacrosse buffers), calls Haiku for schedule proposal, adjustment loop (max 3 rounds), writes confirmed blocks to GCal via `create_event()`. Deletes prior Jade blocks on revise. Logs duration overrides to `duration_signals.jsonl`. Triggered by `/timeblock` or post-nightly prompt. | 2 |
 | `jade_setup.py` | One-time Notion workspace setup. Creates all 6 databases (Tasks, Projects, Research Vault, Skills, Practice Log, Opportunities) via Notion API with correct schemas and relations. Writes DB IDs to `memory/notion_ids.json`. `--check` validates accessibility and relation targets. `--force` rebuilds. Run once before Phase 2.5; not called at runtime. | 2.5 |
 | `integrations/jade_notion.py` | Notion API integration — task queries and writes. `get_todays_tasks()`, `get_upcoming_tasks(n)`, `get_overdue_tasks()` → sorted task dicts. `create_task()`, `update_task_status()`, `create_recurring_task()` (bulk-creates daily child instances with chunk math: `ceil(total/chunk)` instances, `end = start + n - 1` days). Uses urllib only (no requests — macOS Python.org SSL workaround). Credentials from `~/.config/jade/credentials`, DB IDs from `memory/notion_ids.json`. Never raises. | 2.5 |
@@ -91,15 +101,14 @@ SOUL.md
 
 `build_nightly_system_prompt(context: dict)` in `jade_prompts.py`:
 
+**Phase 2.6 stub — not called by `jade_nightly.py` as of Phase 2.5.** `jade_nightly.py` is now a pure script with no LLM calls. This function is preserved for Phase 2.6 when project questions re-enter the nightly and a system prompt will be needed again.
+
 ```
 SOUL.md
   + AI_STEERING_RULES.md (optional)
   + memory/ACTIVE_GOALS.md
   + ## NIGHTLY SESSION CONTEXT
-      today, days_to_act, calendar_events, domains,
-      tasks_today (for by-name reference during check-in), tasks_overdue,
-      recent_logs (last 3 nights)
-  + Nightly Session Structure instructions
+      today, tasks_today (list[dict] | None), tasks_tmrw (list[dict] | None)
 ```
 
 ---
@@ -124,7 +133,7 @@ SOUL.md
 - **HTTP:** `urllib` + `ssl._create_unverified_context()` — no `requests` (macOS Python.org SSL workaround)
 - **Query functions:** `get_todays_tasks()`, `get_upcoming_tasks(n)`, `get_overdue_tasks()` → `list[dict]` sorted by priority then due time
 - **Write functions:** `create_task()` → page ID; `update_task_status()` → bool; `create_recurring_task()` → list of page IDs (parent + children)
-- **Task dict schema:** `{id, name, priority, due, energy, duration, status, area, recurring, chunk_size, total_target, rec_start, rec_end}`
+- **Task dict schema:** `{id, name, priority, due, energy, duration, status, area, recurring, chunk_size, total_target, rec_start, rec_end}` — `duration` reads from `"Estimated Duration (min)"` Notion property
 - **Failure mode:** All functions catch all exceptions, log to stderr, return `[]` / `None` / `False`. Never raises.
 
 ### integrations/schoology.py

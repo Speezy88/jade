@@ -3,6 +3,29 @@
 
 ---
 
+## 2026-04-11 — Nightly redesign + Notion data source priority + jade_ingest.py
+
+**Nightly redesign (`jade_nightly.py`):** Rewrote from a 12-minute, 5-phase conversational debrief (Haiku, multi-turn) into a 2–3 minute pure script with no LLM calls. Part 1: iterates over `get_todays_tasks()`, asks yes/no per incomplete task, calls `update_task_status()` immediately. Part 3: lists tomorrow's tasks, one free-text addition, writes `tomorrow_context.json` (soft context only) and a structured nightly log. Part 2 (Project Next Action) deferred to Phase 2.6. `build_nightly_system_prompt()` in `jade_prompts.py` reduced to a Phase 2.6 stub. SOUL.md gained a NIGHTLY CHECK-IN SPECIFICATION section documenting the new behavior.
+
+**Notion data source priority enforcement:** `jade_briefing.py` now guards Notion calls behind a credentials + `notion_ids.json` existence check — returns `None` (not `[]`) when unavailable so `jade_prompts.py` can surface an explicit "Notion unavailable" error instead of silently showing "no tasks." `_format_context()` in `jade_prompts.py` updated to distinguish `None` (unavailable) from `[]` (healthy, zero results). Data source contract documented in `build_system_prompt()` docstring and AI_STEERING_RULES.md.
+
+**`jade_ingest.py` (new):** Standalone bulk ingest. Spencer pastes raw text; Haiku (single-turn) classifies into tasks/projects with exact Notion area/priority strings; preview shown; on confirm, `create_task()` called per task. Projects shown in preview but skipped until Phase 2.6. `jade_setup.py` updated to include "Manatee Aquatic" in `_AREA_OPTIONS`.
+
+**`jade_notion.py`:** Renamed `"Estimated Duration"` property to `"Estimated Duration (min)"` across all three call sites (read at line 144, write in `create_task()`, write in `create_recurring_task()`).
+
+Files changed:
+- `jade_nightly.py` — complete rewrite (pure script, ~140 lines vs 364)
+- `jade_prompts.py` — `_format_nightly_context()` reduced to Phase 2.6 stub; `build_system_prompt()` data source contract; `_format_context()` None/[] distinction
+- `jade_briefing.py` — Notion availability guard (credentials + notion_ids.json check)
+- `jade_ingest.py` — added (bulk ingest, standalone)
+- `jade_setup.py` — added "Manatee Aquatic" to `_AREA_OPTIONS`
+- `integrations/jade_notion.py` — "Estimated Duration" → "Estimated Duration (min)"
+- `SOUL.md` — NIGHTLY CHECK-IN SPECIFICATION added; briefing spec updated with data sources
+- `AI_STEERING_RULES.md` — Notion data source rule added
+- `docs/ARCHITECTURE.md` — nightly diagram, File Responsibilities (jade_nightly.py updated, jade_ingest.py added), Prompt Assembly stub, Integration Contract field name
+
+---
+
 ## 2026-04-10 — Phase 2.5 complete: Notion Task Layer + nightly exit fix
 
 **Notion workspace setup (`jade_setup.py`):** One-time script that creates all 6 Notion

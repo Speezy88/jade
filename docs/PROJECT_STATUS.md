@@ -1,5 +1,5 @@
 # PROJECT_STATUS.md
-*Last updated: 2026-04-10*
+*Last updated: 2026-04-11*
 
 ---
 
@@ -14,7 +14,7 @@ Phases 1, 1.5, 2, and 2.5 are complete and operational.
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 1 | Morning briefing — live Calendar + Schoology + Weather, launchd, SOUL.md | ✅ Complete |
-| 1.5 | Nightly check-in — `jade_nightly.py`, interactive 5-phase session | ✅ Complete |
+| 1.5 | Nightly check-in — `jade_nightly.py`, pure script (task closeout + tomorrow flag) | ✅ Complete |
 | 2 | Calendar time-blocking — `/timeblock` command, gcal read+write | ✅ Complete |
 | 2.5 | Notion Task Layer — Tasks DB, `jade_notion.py`, briefing + nightly wired | ✅ Complete |
 | 2.6 | Notion Project Engine — Projects DB, `create_project()`, 10-sec block, nightly edits | **Current** |
@@ -47,7 +47,7 @@ Phases 1, 1.5, 2, and 2.5 are complete and operational.
 - Core config: SOUL.md, AI_STEERING_RULES.md, AGENTS.md, ACTIVE_GOALS.md
 
 **Phase 1.5:**
-- `jade_nightly.py` — interactive 5-phase nightly check-in (A→E), structured extraction, log + context write, post-Phase-E timeblock prompt
+- `jade_nightly.py` — pure script, no LLM. Part 1: yes/no task closeout → `update_task_status()`. Part 3: tomorrow list + addition prompt → `tomorrow_context.json` + nightly log. Post-run: offers timeblock.
 - `launchd/com.jade.nightly.plist` — 9:15pm weekdays / 8:45pm weekends
 
 **Phase 2:**
@@ -58,11 +58,11 @@ Phases 1, 1.5, 2, and 2.5 are complete and operational.
 - `memory/logs/duration_signals.jsonl` — override signal capture (seeds Phase 5.5)
 
 **Phase 2.5:**
-- `jade_setup.py` — one-time Notion workspace setup; creates 6 DBs via Notion API; writes `memory/notion_ids.json`; `--check` validates relations
-- `integrations/jade_notion.py` — task queries (`get_todays_tasks`, `get_overdue_tasks`, `get_upcoming_tasks`) + writes (`create_task`, `update_task_status`, `create_recurring_task`); urllib only, never raises
-- `jade_briefing.py` — now injects `tasks_today` + `tasks_overdue` into morning context
-- `jade_nightly.py` — now injects tasks by name; sentinel exit protocol (`[SESSION_COMPLETE]`); 10-min inactivity timeout via `signal.SIGALRM`
-- `jade_prompts.py` — `_format_task_line()`, task sections in briefing + nightly formatters, `_NIGHTLY_CLOSE_PROTOCOL`
+- `jade_setup.py` — one-time Notion workspace setup; creates 6 DBs via Notion API; writes `memory/notion_ids.json`; `--check` validates relations; areas include "Manatee Aquatic"
+- `integrations/jade_notion.py` — task queries (`get_todays_tasks`, `get_overdue_tasks`, `get_upcoming_tasks`) + writes (`create_task`, `update_task_status`, `create_recurring_task`); urllib only, never raises; property name: "Estimated Duration (min)"
+- `jade_briefing.py` — injects `tasks_today` + `tasks_overdue`; Notion availability guard (credentials + notion_ids.json check → `None` if missing)
+- `jade_prompts.py` — `_format_task_line()`, task sections in briefing formatter; `None` vs `[]` distinction for Notion availability
+- `jade_ingest.py` — bulk Notion ingest; paste raw text → Haiku classifies → preview → `create_task()`; projects shown but skipped (Phase 2.6)
 - Notion workspace: 6 databases live with correct schemas and relations
 
 ---
