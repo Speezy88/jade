@@ -3,6 +3,26 @@
 
 ---
 
+## 2026-04-12 — Phase 2.6: Notion Project Engine + jade_ingest v2
+
+**Phase 2.6 — Notion Project Engine (`integrations/jade_notion.py`):** Added 4 project functions: `create_project()` (raises `ValueError` on missing name/goal/area; writes 10-second re-orientation block as first page content via Notion blocks API), `edit_project()` (partial update — only touches specified fields), `update_next_action()` (appends dated ⚡/📍/🚧 block to page body), `get_active_projects(area=None)`. Also added `_page_to_project()` and `_orientation_blocks()` helpers. ISC-7 (validation) verified; ISC-8 through ISC-12 partially tested.
+
+**Phase 2.6 wiring:** `jade_nightly.py` Part 2 implemented — after task closeout, iterates over active projects with per-project next-action prompt → `update_next_action()`. `jade_briefing.py` now fetches active projects, filters for deadline ≤ 48 hours → `projects_urgent` injected into system prompt. `jade_prompts.py` updated with `projects_urgent` rendering in `_format_context()`.
+
+**jade_ingest v2 — 5 destination types:** Full rewrite. Classification prompt rebuilt as `_build_classify_prompt(today, project_names)` — runtime injection of today's date (natural-language date resolution: "by Friday" → next Friday's YYYY-MM-DD, "next week" → Monday, etc.) and active project list (for project linking via fuzzy name match). New destination types: `research` → Research Vault DB (Status=Draft), `practice` → Practice Log DB, `note` → appended verbatim to existing project page body via `append_page_content()`. Added 3 functions to `jade_notion.py`: `append_page_content()`, `create_research_job()`, `create_practice_entry()` (Skill relation omitted — Phase 2.8). ISC-I8 (date resolution) verified; ISC-I9 (note→page body) has a known bug — project name lookup or blocks PATCH failing; ISC-I10 through I17 not yet tested.
+
+**Known open bug:** ISC-I9 — `_write_note()` falls back to "create as task?" prompt instead of writing to project page body. Root cause: likely project name mismatch in `project_map` (only Active projects) or Notion blocks PATCH failure. Debug next session.
+
+Files changed:
+- `integrations/jade_notion.py` — 7 new functions: create_project, edit_project, update_next_action, get_active_projects, append_page_content, create_research_job, create_practice_entry
+- `jade_ingest.py` — full rewrite to v2 (5 destination types, date inference, project linking)
+- `jade_nightly.py` — Part 2 implemented (project review loop)
+- `jade_briefing.py` — projects_urgent deadline flag
+- `jade_prompts.py` — projects_urgent context key in _format_context()
+- `docs/ARCHITECTURE.md` — all sections updated for Phase 2.6 + ingest v2
+
+---
+
 ## 2026-04-11 — Nightly redesign + Notion data source priority + jade_ingest.py
 
 **Nightly redesign (`jade_nightly.py`):** Rewrote from a 12-minute, 5-phase conversational debrief (Haiku, multi-turn) into a 2–3 minute pure script with no LLM calls. Part 1: iterates over `get_todays_tasks()`, asks yes/no per incomplete task, calls `update_task_status()` immediately. Part 3: lists tomorrow's tasks, one free-text addition, writes `tomorrow_context.json` (soft context only) and a structured nightly log. Part 2 (Project Next Action) deferred to Phase 2.6. `build_nightly_system_prompt()` in `jade_prompts.py` reduced to a Phase 2.6 stub. SOUL.md gained a NIGHTLY CHECK-IN SPECIFICATION section documenting the new behavior.

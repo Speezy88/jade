@@ -1,5 +1,5 @@
 # PROJECT_STATUS.md
-*Last updated: 2026-04-11*
+*Last updated: 2026-04-12*
 
 ---
 
@@ -59,36 +59,45 @@ Phases 1, 1.5, 2, and 2.5 are complete and operational.
 
 **Phase 2.5:**
 - `jade_setup.py` — one-time Notion workspace setup; creates 6 DBs via Notion API; writes `memory/notion_ids.json`; `--check` validates relations; areas include "Manatee Aquatic"
-- `integrations/jade_notion.py` — task queries (`get_todays_tasks`, `get_overdue_tasks`, `get_upcoming_tasks`) + writes (`create_task`, `update_task_status`, `create_recurring_task`); urllib only, never raises; property name: "Estimated Duration (min)"
-- `jade_briefing.py` — injects `tasks_today` + `tasks_overdue`; Notion availability guard (credentials + notion_ids.json check → `None` if missing)
-- `jade_prompts.py` — `_format_task_line()`, task sections in briefing formatter; `None` vs `[]` distinction for Notion availability
-- `jade_ingest.py` — bulk Notion ingest; paste raw text → Haiku classifies → preview → `create_task()`; projects shown but skipped (Phase 2.6)
+- `integrations/jade_notion.py` — task queries (`get_todays_tasks`, `get_overdue_tasks`, `get_upcoming_tasks`) + writes (`create_task`, `update_task_status`, `create_recurring_task`); urllib only, never raises
+- `jade_briefing.py` — injects `tasks_today` + `tasks_overdue`; Notion availability guard
+- `jade_prompts.py` — `_format_task_line()`, task sections in briefing formatter; `None` vs `[]` distinction
+- `jade_ingest.py` — bulk Notion ingest v1 (tasks/projects only)
 - Notion workspace: 6 databases live with correct schemas and relations
+
+**Phase 2.6 (in progress — ISC partially verified):**
+- `integrations/jade_notion.py` — added project functions: `create_project()`, `edit_project()`, `update_next_action()`, `get_active_projects()`; added ingest v2 functions: `append_page_content()`, `create_research_job()`, `create_practice_entry()`
+- `jade_nightly.py` — Part 2 implemented: project review loop after task closeout → `update_next_action()`
+- `jade_briefing.py` — `projects_urgent` deadline ≤ 48hrs flag added
+- `jade_prompts.py` — `projects_urgent` rendering in `_format_context()`
+- `jade_ingest.py` — full rewrite to v2: 5 destination types (task/project/research/practice/note), natural-language date resolution, project linking, `confirm_and_edit()` loop
 
 ---
 
 ## Where to Start Next Session
 
-**Phase 2.6: Notion Project Engine**
+**Fix ISC-I9, then complete ISC verification for Phase 2.6**
 
-Spec: `docs/features/Jade_Phase_2.5-2.7_Spec.md` (Phase 2.6 section)
+1. **Debug ISC-I9** — note → project page body not writing. Check: (a) `print(project_map)` before `_write_note()` to confirm project name present; (b) does `append_page_content()` return True? (c) stderr for Notion API error. Root cause: likely project is not `🔄 Active` status (only Active projects are in `project_map`) or blocks PATCH failure.
 
-1. Add `create_project()`, `edit_project()`, `update_next_action()`, `get_active_projects()` to `integrations/jade_notion.py`
-2. Wire project creation/editing into nightly check-in (Phase C discussion → update next action)
-3. Active projects with deadline < 48hrs → flagged in morning briefing
-4. ISC-7 through ISC-12 must all pass before moving to Phase 2.7
+2. **Run remaining ISC** — ISC-8 through ISC-12 (Phase 2.6) and ISC-I10 through ISC-I17 (ingest v2) not yet tested. Run each manually per the verification table in `docs/features/Jade_Phase_2.5-2.7_Spec.md`.
+
+3. **Commit jade_ingest.py** — it is untracked (never committed). `git add jade_ingest.py && git commit`.
+
+4. **Phase 2.7** — once Phase 2.6 ISC passes: Research Pipeline. `jade_research.py`, Research Vault DB writes from Jade (currently only ingest queues them). Spec: `docs/features/Jade_Phase_2.5-2.7_Spec.md` (Phase 2.7 section).
 
 ---
 
 ## Known Gaps
 
-- Google Calendar school calendar (`spencerhatch@seattleacademy.org`) may not be
-  accessible via Gmail OAuth — if events are missing, check calendar sharing settings
+- **ISC-I9 open bug** — jade_ingest.py `_write_note()` not writing to project page body; falls back to task prompt instead. Debug next session.
+- **ISC-8 through ISC-12, ISC-I10 through I17** — not yet tested. Phase 2.6 not formally closed.
+- **jade_ingest.py untracked** — new file never committed to git. `git add jade_ingest.py` needed.
+- **Practice Log "Skill" relation** — `create_practice_entry()` omits the Skill relation field (requires skill name→page_id lookup). Phase 2.8 fix.
+- Google Calendar school calendar (`spencerhatch@seattleacademy.org`) may not be accessible via Gmail OAuth — if events are missing, check calendar sharing settings
 - `jade_router.py` not yet built — all routing is hardcoded to cloud (Haiku/Sonnet)
 - No signal capture yet (Phase 3) — briefing quality ratings not being recorded
-- `memory/WORK/` task tracking not in use yet — ISC.json workflow manual only
-- `jade_timeblock.py` ISC-4/ISC-5 (ACT commitment auto-read from ACTIVE_GOALS.md, Haiku estimate basis) — not formally verified; works in practice via prompt injection
-- Phase 2.5 ISC-1 through ISC-6 have correct code paths but live end-to-end verification requires tasks to exist in the Notion Tasks DB
+- `jade_timeblock.py` ISC-4/ISC-5 — not formally verified; works in practice via prompt injection
 - Notion API uses `ssl._create_unverified_context()` workaround — fix properly by running `/Applications/Python\ 3.13/Install\ Certificates.command`
 
 ---
